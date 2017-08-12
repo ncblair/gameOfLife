@@ -192,8 +192,8 @@ $(document).ready(function(){
     
     //when the player reaches the finish, move it
     function moveFinish(){
-        xFinishMin = Math.round(Math.random()*gridHeight - 10);
-        yFinishMin = Math.round(Math.random()*gridWidth - 10);
+        xFinishMin = Math.round(Math.random()*(gridHeight - 30) + 10);
+        yFinishMin = Math.round(Math.random()*(gridWidth - 30) + 10);
         yFinishMax = yFinishMin + 10;
         xFinishMax = xFinishMin + 10;
         console.log("xfinish" + xFinishMin);
@@ -241,7 +241,7 @@ $(document).ready(function(){
 	function fillRandom() { //fill the grid randomly
 	    for (var j = 0; j < gridHeight; j++) { //iterate through rows
 	        for (var k = 0; k < gridWidth; k++) { //iterate through columns
-	            theGrid[j][k] = Math.round(Math.random() -.4);
+	            theGrid[j][k] = Math.round(Math.random() -.44);
                 if (j > 20 && j < 70 && k > 50 && k < 100){//avoid the spawn point
                     theGrid[j][k] = 0;
                 }
@@ -297,7 +297,23 @@ $(document).ready(function(){
 	    }
 	    console.log(liveCount/100);
 	}
-
+    
+    function onBorder(x, y){
+        return x == 2 || x == gridHeight - 2 || y == 2 || y == gridHeight - 2;
+    }
+    
+    function nearPlayer(x, y){
+        return (x > Xpos - 10 && x < Xpos + 10 && y > Ypos - 10 && y < Ypos + 10);
+    }
+    
+    //ensures game doesn't end by adding random squares (mutations).
+    function addChaos(x, y){
+        if (!nearPlayer(x,y) && !nearFinish(x,y)){
+            return (Math.random()*Math.random()*Math.random() > .94);
+        }
+        return false;
+    }
+    
 	function updateGrid() { //perform one iteration of grid update
 	   
 	    for (var j = 1; j < gridHeight - 1; j++) { //iterate through rows
@@ -332,6 +348,14 @@ $(document).ready(function(){
                 if (nearFinish(j,k)){
                     mirrorGrid[j][k] = 0;
                 }
+                
+                if (onBorder(j,k)){
+                    mirrorGrid[j][k] = 1;
+                }
+                if (addChaos(j,k)){
+                    mirrorGrid[j][k] = 1;
+                }
+                
 	        }
 	    }
 

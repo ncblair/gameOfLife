@@ -15,3 +15,4 @@ ___
 - Move to an Object Oriented Scheme:
     - makes it easier to implement multiple goals/players
     - more intuitive, improves readability
+- Deploy on nathanblair.me, use mySQL database to store high scores
