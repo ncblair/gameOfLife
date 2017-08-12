@@ -1,11 +1,11 @@
-*{padding:0; margin:0;}
+*{padding:0; margin:0; font-family:sans-serif;}
 
 .action-bar{
     text-align:center;
     min-width:800px;
     width:100%;
     height:40px;
-    background-color:whitesmoke;
+    background-color:black;
     position:fixed;
 }
 body{
@@ -37,6 +37,9 @@ body{
 
 
 .navitem{
+    font-weight:bolder;
+    color:white;
+    font-size:20px;
     vertical-align:middle;
     display:inline-block;
     line-height:40px;
@@ -44,8 +47,6 @@ body{
     margin-right:30px;
     padding-left:30px;
     padding-right:30px;
-    border-right:1px solid red;
-    border-left:1px solid red;
 }
 
 .starting-message{

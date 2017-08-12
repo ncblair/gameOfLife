@@ -19,3 +19,8 @@ ___
 - Add Music
 - Add Achievements/Customizable player
 - Add Konami Code Easter Egg
+- Add Mobile Support
+
+## Acknowledgements
+- https://stackoverflow.com/questions/11355595/is-it-possible-to-override-the-keydown-repeat-delay-in-javascript
+- http://disruptive-communications.com/conwaylifejavascript/

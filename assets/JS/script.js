@@ -20,10 +20,10 @@ $(document).ready(function(){
     var Ystart = 75;
     var moving;
     var $score = $(".score");
-    var xFinishMinStart = 145;
-    var xFinishMaxStart = 155;
-    var yFinishMinStart = 70;
-    var yFinishMaxStart = 80;
+    var xFinishMinStart = Math.round(gridWidth/2) - 5;
+    var xFinishMaxStart = Math.round(gridWidth/2) + 5;
+    var yFinishMinStart = Math.round(gridHeight/2) - 5;
+    var yFinishMaxStart = Math.round(gridHeight/2) + 5;
     var xFinishMin;
     var xFinishMax;
     var yFinishMin;
@@ -309,7 +309,7 @@ $(document).ready(function(){
     //ensures game doesn't end by adding random squares (mutations).
     function addChaos(x, y){
         if (!nearPlayer(x,y) && !nearFinish(x,y)){
-            return (Math.random()*Math.random()*Math.random() > .94);
+            return (Math.random()*Math.random()*Math.random() > .95);
         }
         return false;
     }
