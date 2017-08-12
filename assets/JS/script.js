@@ -1,12 +1,21 @@
+//some of this code is inspired by http://disruptive-communications.com/conwaylifejavascript/
+
+
 $(document).ready(function(){
-	//this is all for background game of life
+	//check connection to javascript
     console.log("connected");
+    
+    
+    //declare variables
     var $c = $("#game-field");
 	var $ctx = $c[0].getContext("2d");
-	var gridHeight = $c.height()/2;
-	var gridWidth = $c.width()/2;
+    var fillsize = 3;//amount of pixels per block on canvas
+	var gridHeight = Math.round($c.height()/fillsize);//amount of cells in the grid (height)
+	var gridWidth = Math.round($c.width()/fillsize);//amount of cells in the grid (width)
+    var $cHeight = $c.height();
+    var $cWidth = $c.width();
     var Xpos;
-    var Ypos;
+    var Ypos;//position on GRID
     var Xstart = 45;
     var Ystart = 75;
     var moving;
@@ -18,16 +27,22 @@ $(document).ready(function(){
     var xFinishMin;
     var xFinishMax;
     var yFinishMin;
-    var yFinishMax;
+    var yFinishMax;//position on GRID
+    
 	var theGrid = createArray(gridWidth);
 	var mirrorGrid = createArray(gridWidth);
 	$ctx.fillStyle = "red";
 	var count = 0;
-	
 	var $starting_message = $(".starting-message");
     var $death_message = $(".death-message");
     
+    
+    
+    //prepare new game
     startOver();
+    
+    
+    //on spacebar, start main loop
     $('body').keyup(function(e){
         if (!moving){
             if(e.keyCode == 32){
@@ -41,6 +56,8 @@ $(document).ready(function(){
         
     });
     
+    
+    //override keydown repeat delay
     //taken from stackoverflow https://stackoverflow.com/questions/11355595/is-it-possible-to-override-the-keydown-repeat-delay-in-javascript
     function DeltaTimer(render, interval) {
         var timeout;
@@ -111,28 +128,34 @@ $(document).ready(function(){
             }
         }
     })(30);
-    
-    window.addEventListener("keypressed", function (event) {
-        switch (event.keyCode) {
-        case 37:
-            Xpos -=1;
-            break;
-        case 38:
-            Ypos -= 1;
-            break;
-        case 39:
-            Xpos += 1;
-            break;
-        case 40:
-            Ypos += 1;
-            break;
-        }
-    }, false);
     //end taken from stackoverflow
     
     
-	
+    //arrow keys control movement
+    window.addEventListener("keypressed", function (event) {
+        if(moving){
+            switch (event.keyCode) {
+                case 37:
+                    Xpos -=1;
+                    break;
+                case 38:
+                    Ypos -= 1;
+                    break;
+                case 39:
+                    Xpos += 1;
+                    break;
+                case 40:
+                    Ypos += 1;
+                    break;
+            }
+        }
+    
+    }, false);
+    
+	//******************************
 	//functions
+    //*********
+    
 	function tick() { //main loop
 		setTimeout(function(){
             console.time("loop");
@@ -147,6 +170,7 @@ $(document).ready(function(){
                 
                 
             }
+            //increase the players score, move finish, continue loop
             if (playerWins()){
                 score += 1;
                 moveFinish();
@@ -166,17 +190,18 @@ $(document).ready(function(){
 		}, 20);
 	}
     
+    //when the player reaches the finish, move it
     function moveFinish(){
-        xFinishMin = Math.round(Math.random()*gridWidth - 10);
-        yFinishMin = Math.round(Math.random()*gridHeight - 50);
+        xFinishMin = Math.round(Math.random()*gridHeight - 10);
+        yFinishMin = Math.round(Math.random()*gridWidth - 10);
         yFinishMax = yFinishMin + 10;
         xFinishMax = xFinishMin + 10;
-        console.log(" xfinish" + xFinishMin);
+        console.log("xfinish" + xFinishMin);
         console.log("yfinish" + yFinishMin);
         
     }
     
-    
+    //reset the board, prepare for new game
     function startOver(){
         xFinishMin = xFinishMinStart;
         xFinishMax = xFinishMaxStart;
@@ -191,7 +216,8 @@ $(document).ready(function(){
         drawPlayer();
         drawFinish();
     }
-
+    
+    
 	function createArray(rows) { //creates a 2 dimensional array of required height
 	    var arr = [];
 	    for (var i = 0; i < rows; i++) {
@@ -200,6 +226,7 @@ $(document).ready(function(){
 	    return arr;
 	}
     
+    //check if the player is touching a red node. 
     function playerDies(){
         for (var x = Xpos -1; x <= Xpos + 1; x++){
             for (var y = Ypos - 1; y <= Ypos + 1; y++){
@@ -215,39 +242,41 @@ $(document).ready(function(){
 	    for (var j = 0; j < gridHeight; j++) { //iterate through rows
 	        for (var k = 0; k < gridWidth; k++) { //iterate through columns
 	            theGrid[j][k] = Math.round(Math.random() -.4);
-                if (j > 20 && j < 70 && k > 50 && k < 100){
+                if (j > 20 && j < 70 && k > 50 && k < 100){//avoid the spawn point
                     theGrid[j][k] = 0;
                 }
-                if (nearFinish(j,k)){
+                if (nearFinish(j,k)){//avoid the finish point
                     theGrid[j][k] = 0;
                 }
 	        }
 	    }
 	}
     
-    function playerWins(){
+    function playerWins(){//return true is player is touching finish
         return (Xpos >= xFinishMin - 1 && Xpos <= xFinishMax && Ypos >= yFinishMin - 1 && Ypos <= yFinishMax);
     }
     
-    function nearFinish(x,y){
+    function nearFinish(x,y){//return true if x,y are within 5 spots of the finish
         return (x > xFinishMin - 5 && x < xFinishMax + 5 && y > yFinishMin - 5 && y < yFinishMax + 5);
     }
-    function drawPlayer() {
+    
+    
+    function drawPlayer() {//draw player at Xpos Ypos such that it does not disrupt the game of life
         $ctx.fillStyle = "green";
         for (var x = Xpos -1; x <= Xpos + 1; x++){
             for (var y = Ypos - 1; y <= Ypos + 1; y++){
-                $ctx.fillRect(x,y,1,1);
+                $ctx.fillRect(x*fillsize,y*fillsize,fillsize,fillsize);
             }
         }
         $ctx.fillStyle = "red";
     }
     
-    function drawFinish(){
+    function drawFinish(){//draw finish
         console.log("drawing finish");
         $ctx.fillStyle = "gold";
         for (var x = xFinishMin; x < xFinishMax; x++){
             for (var y = yFinishMin; y < yFinishMax; y++){
-                $ctx.fillRect(x,y,1,1);
+                $ctx.fillRect(x*fillsize,y*fillsize,fillsize,fillsize);
             }
         }
         $ctx.fillStyle = "red";
@@ -256,11 +285,11 @@ $(document).ready(function(){
 
 	function drawGrid() { //draw the contents of the grid onto a canvas
 	    var liveCount = 0;
-	    $ctx.clearRect(0, 0, gridHeight, gridWidth); //this should clear the canvas ahead of each redraw
+	    $ctx.clearRect(0, 0, $cHeight, $cWidth); //this should clear the canvas ahead of each redraw
 	    for (var j = 1; j < gridHeight; j++) { //iterate through rows
 	        for (var k = 1; k < gridWidth; k++) { //iterate through columns
 	            if (theGrid[j][k] === 1) {
-	                $ctx.fillRect(j, k, 1, 1);
+	                $ctx.fillRect(j*fillsize, k*fillsize, fillsize, fillsize);
 	                liveCount++;
 	                
 	            }
