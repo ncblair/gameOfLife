@@ -35,12 +35,6 @@ body{
     text-align:center;
 }
 
-.restart{
-    height:100%;
-    width:60px;
-    display:inline-block;
-    cursor:pointer;
-}
 
 .navitem{
     vertical-align:middle;
@@ -67,19 +61,6 @@ body{
 }
 
 .death-message{
-    color:white;
-    font-size:80px;
-    font-weight:bolder;
-    text-align:center;
-    position:fixed;
-    display:inline-block;
-    width:100%;
-    z-index:2;
-    top:40%;
-    opacity:0;
-}
-
-.victory-message{
     color:white;
     font-size:80px;
     font-weight:bolder;
