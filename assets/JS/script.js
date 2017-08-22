@@ -19,7 +19,12 @@ $(document).ready(function(){
     var Xstart = 45;
     var Ystart = 75;
     var moving;
+    var $user = $(".user");
+    var username = setHighScoreName();
+    var score;
     var $score = $(".score");
+    var highscore = setHighScore();
+    var $highscore = $(".highscore");
     var xFinishMinStart = Math.round(gridWidth/2) - 5;
     var xFinishMaxStart = Math.round(gridWidth/2) + 5;
     var yFinishMinStart = Math.round(gridHeight/2) - 5;
@@ -165,8 +170,12 @@ $(document).ready(function(){
             drawFinish();
             if (playerDies()){
                 $death_message.css("opacity", "1");
-                
+                setHighScore();
+                setHighScoreName();
+                moving = false;
+                updateHighScore();
                 startOver();
+
                 
                 
             }
@@ -201,6 +210,56 @@ $(document).ready(function(){
         
     }
     
+    //partially taken from https://stackoverflow.com/questions/28177117/how-to-update-mysql-with-php-and-ajax-without-refreshing-the-page
+    function updateHighScore(){
+        console.log("updatingHighScore");
+        console.log("score is " + score);
+        console.log("highscore is " + highscore);
+        if (score > highscore){
+            username = prompt("Congratulations! You beat the High Score. What is your name?");
+            $.ajax({
+                type:'POST',//type of ajax
+                url:'/gameOfLife/assets/PHP/highScore.php',//where the request is going
+                data:{"name": username, "score": score},//the variable you want to send
+                success:function(result){
+                    //result is your result from the xhttpRequest.
+                    console.log("result" + result);
+                    highscore = result;
+                    $highscore.text(highscore);
+                }
+            })
+        }
+    }
+    
+    function setHighScore(){
+        console.log("settingHighScore");
+        $.ajax({
+           type:'POST',
+           url:'/gameOfLife/assets/PHP/highScore.php',
+           data:{"action": 1},
+           success:function(result){
+                    //result is your result from the xhttpRequest.
+                    console.log("result2" + result);
+                    highscore = result;
+                    $highscore.text(highscore);
+                }
+        });
+    }
+    
+    function setHighScoreName(){
+        console.log("settingHighScoreName");
+        $.ajax({
+            type:'POST',
+            url:'/gameOfLife/assets/PHP/highScore.php',
+            data:{"action2":1},
+            success:function(result){
+                    console.log("name" + result);
+                    username = result;
+                    $user.text(username);
+                }
+        })
+    }
+    
     //reset the board, prepare for new game
     function startOver(){
         xFinishMin = xFinishMinStart;
@@ -210,6 +269,7 @@ $(document).ready(function(){
         score = 0;
         moving = false;
         Xpos = Xstart;
+        $highscore.text(highscore);
         Ypos = Ystart;
         fillRandom(); //create the starting state for the grid by filling it with random cell
         drawGrid();
