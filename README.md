@@ -8,14 +8,11 @@ The Goal of the game is to get to a gold square, which will increase the players
 
 ## Future Improvements
 ___
-- Add power up/more complex game elements such as:
-    - multiple goals
-    - a timer
-    - a way to increase the size of your player and it's armor
 - Move to an Object Oriented Scheme:
     - makes it easier to implement multiple goals/players
     - more intuitive, improves readability
-- Deploy on nathanblair.me, use mySQL database to store high scores
+- Program CPU AI
+    - Add Player VS. CPU mode
 - Add Music
 - Add Achievements/Customizable player
 - Add Konami Code Easter Egg
