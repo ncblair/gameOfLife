@@ -21,3 +21,4 @@ ___
 ## Acknowledgements
 - https://stackoverflow.com/questions/11355595/is-it-possible-to-override-the-keydown-repeat-delay-in-javascript
 - http://disruptive-communications.com/conwaylifejavascript/
+- https://stackoverflow.com/questions/28177117/how-to-update-mysql-with-php-and-ajax-without-refreshing-the-page
