@@ -11,8 +11,8 @@ ___
 - Move to an Object Oriented Scheme:
     - makes it easier to implement multiple goals/players
     - more intuitive, improves readability
-- Program CPU AI
-    - Add Player VS. CPU mode
+- Program AI
+    - Add Player VS. Computer mode
 - Add Music
 - Add Achievements/Customizable player
 - Add Konami Code Easter Egg
