@@ -2,8 +2,145 @@
 
 
 $(document).ready(function(){
-	//check connection to javascript
+	//check connection b/w JS and HTML
     console.log("connected");
+    
+    
+    /**********************
+    *set up new Game, Initialize game elements
+    ***********************/
+    var board = new Board($("#game-field"), 3);
+    var user = new Player(true, 2, board, 1/5, 1/2);
+    var finish = new Finish(10, board, 4/5, 1/2);
+    
+    startListeningToKeyboard();
+    
+    
+    /**
+    *A Board is represented in HTML as a $CANVAS,
+    *with context $CTX. FILLSIZE represents the height and width of
+    *nodes on the screen. The board is represented and updated with 
+    *two grids that mimic the dimensions of the canvas.
+    **/
+    function Board($canvas, fillsize) {
+        
+        /**
+        *performs one iteration of grid update
+        **/
+        this.updateGrid = function() {
+            for (var j = 1; j < gridHeight - 1; j++) { //iterate through rows
+                for (var k = 1; k < gridWidth - 1; k++) { //iterate through columns
+                    var totalCells = 0;
+                    //add up the total values for the surrounding cells
+                    totalCells += theGrid[j - 1][k - 1]; //top left
+                    totalCells += theGrid[j - 1][k]; //top center
+                    totalCells += theGrid[j - 1][k + 1]; //top right
+
+                    totalCells += theGrid[j][k - 1]; //middle left
+                    totalCells += theGrid[j][k + 1]; //middle right
+
+                    totalCells += theGrid[j + 1][k - 1]; //bottom left
+                    totalCells += theGrid[j + 1][k]; //bottom center
+                    totalCells += theGrid[j + 1][k + 1]; //bottom right
+
+                    //apply the rules to each cell
+                    switch (totalCells) {
+                        case 2:
+                            mirrorGrid[j][k] = theGrid[j][k];
+
+                            break;
+                        case 3:
+                            mirrorGrid[j][k] = 1; //live
+
+                            break;
+                        default:
+                            mirrorGrid[j][k] = 0; //die
+                    }
+
+                    if (nearFinish(j,k)){
+                        mirrorGrid[j][k] = 0;
+                    }
+
+                    if (onBorder(j,k)){
+                        mirrorGrid[j][k] = 1;
+                    }
+                    if (addChaos(j,k)){
+                        mirrorGrid[j][k] = 1;
+                    }
+
+                }
+            }
+
+            //swap grids
+            var temp = theGrid;
+            theGrid = mirrorGrid;
+            mirrorGrid = temp;
+        }
+        
+        
+        
+        
+        /**
+        *fills the grid randomly leaving space around PLAYERS and *FINISHES
+        **/
+        this.fillRandom = function(players, finishes) {
+            for (var j = 0; j < gridHeight; j++) { 
+                for (var k = 0; k < gridWidth; k++) { 
+                    theGrid[j][k] = Math.round(Math.random() -.44);
+                    //avoid spawn point
+                    if (j > 20 && j < 70 && k > 50 && k < 100){
+                        theGrid[j][k] = 0;
+                    }
+                    if (nearFinish(j,k)){//avoid the finish point
+                        theGrid[j][k] = 0;
+                    }
+                }
+            }
+        }
+        
+        this.height = function() {
+            return gridHeight;
+        }
+        
+        this.width = function() {
+            return gridWidth;
+        }
+        
+        this.fillsize = function() {
+            return fillsize;
+        }
+        
+        
+        
+        var $ctx = $canvas[0].getContext("2d");
+        
+        var gridHeight = Math.round($canvas.height()/fillsize);
+        var gridWidth = Math.round($canvas.width()/fillsize);
+        var mainGrid = createArray(gridWidth);
+        var mirrorGrid = createArray(gridWidth);
+        
+        
+        /**
+        *fills FILLSIZE squared nodes around X, Y color COLOR.
+        **/
+        function fillNode(x, y, fillsize, color) {
+            $ctx.fillStyle = color;
+            $ctx.fillRect(x*fillsize, y*fillsize, fillsize, fillsize);
+        }
+        
+        
+        /**
+        *creates a 2D array of height ROWS
+        **/
+        function createArray(rows) { 
+            var arr = [];
+            for (var i = 0; i < rows; i++) {
+                arr[i] = [];
+            }
+            return arr;
+	   }
+        
+    }
     
     
     //declare variables
@@ -47,115 +184,7 @@ $(document).ready(function(){
     startOver();
     
     
-    //on spacebar, start main loop
-    $('body').keyup(function(e){
-        if (!moving){
-            if(e.keyCode == 32){
-                // user has pressed space
-                $starting_message.css("opacity","0");
-                $death_message.css("opacity", "0");
-                moving = true;
-                tick(); //call main loop
-            }
-        }
-        
-    });
-    
-    
-    //override keydown repeat delay
-    //taken from stackoverflow https://stackoverflow.com/questions/11355595/is-it-possible-to-override-the-keydown-repeat-delay-in-javascript
-    function DeltaTimer(render, interval) {
-        var timeout;
-        var lastTime;
 
-        this.start = start;
-        this.stop = stop;
-
-        function start() {
-            timeout = setTimeout(loop, 0);
-            lastTime = Date.now();
-            return lastTime;
-        }
-
-        function stop() {
-            clearTimeout(timeout);
-            return lastTime;
-        }
-
-        function loop() {
-            var thisTime = Date.now();
-            var deltaTime = thisTime - lastTime;
-            var delay = Math.max(interval - deltaTime, 0);
-            timeout = setTimeout(loop, delay);
-            lastTime = thisTime + delay;
-            render(thisTime);
-        }
-    }
-    
-    (function (interval) {
-        var keyboard = {};
-
-        window.addEventListener("keyup", keyup, false);
-        window.addEventListener("keydown", keydown, false);
-
-        function keyup(event) {
-            keyboard[event.keyCode].pressed = false;
-        }
-
-        function keydown(event) {
-            var keyCode = event.keyCode;
-            var key = keyboard[keyCode];
-
-            if (key) {
-                if (!key.start)
-                    key.start = key.timer.start();
-                key.pressed = true;
-            } else {
-                var timer = new DeltaTimer(function (time) {
-                    if (key.pressed) {
-                        var event = document.createEvent("Event");
-                        event.initEvent("keypressed", true, true);
-                        event.time = time - key.start;
-                        event.keyCode = keyCode;
-                        window.dispatchEvent(event);
-                    } else {
-                        key.start = 0;
-                        timer.stop();
-                    }
-                }, interval);
-
-                key = keyboard[keyCode] = {
-                    pressed: true,
-                    timer: timer
-                };
-
-                key.start = timer.start();
-            }
-        }
-    })(30);
-    //end taken from stackoverflow
-    
-    
-    //arrow keys control movement
-    window.addEventListener("keypressed", function (event) {
-        if(moving){
-            switch (event.keyCode) {
-                case 37:
-                    Xpos -=1;
-                    break;
-                case 38:
-                    Ypos -= 1;
-                    break;
-                case 39:
-                    Xpos += 1;
-                    break;
-                case 40:
-                    Ypos += 1;
-                    break;
-            }
-        }
-    
-    }, false);
     
 	//******************************
 	//functions
@@ -278,13 +307,6 @@ $(document).ready(function(){
     }
     
     
-	function createArray(rows) { //creates a 2 dimensional array of required height
-	    var arr = [];
-	    for (var i = 0; i < rows; i++) {
-	        arr[i] = [];
-	    }
-	    return arr;
-	}
     
     //check if the player is touching a red node. 
     function playerDies(){
@@ -297,20 +319,6 @@ $(document).ready(function(){
         }
         return false;
     }
-
-	function fillRandom() { //fill the grid randomly
-	    for (var j = 0; j < gridHeight; j++) { //iterate through rows
-	        for (var k = 0; k < gridWidth; k++) { //iterate through columns
-	            theGrid[j][k] = Math.round(Math.random() -.44);
-                if (j > 20 && j < 70 && k > 50 && k < 100){//avoid the spawn point
-                    theGrid[j][k] = 0;
-                }
-                if (nearFinish(j,k)){//avoid the finish point
-                    theGrid[j][k] = 0;
-                }
-	        }
-	    }
-	}
     
     function playerWins(){//return true is player is touching finish
         return (Xpos >= xFinishMin - 1 && Xpos <= xFinishMax && Ypos >= yFinishMin - 1 && Ypos <= yFinishMax);
@@ -438,5 +446,173 @@ $(document).ready(function(){
 	    theGrid = mirrorGrid;
 	    mirrorGrid = temp;
 	}
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    /**
+    *handles all user input
+    **/
+    function startListeningToKeyboard() {
+        
+        
+        /**
+        *on spacebar, start main loop
+        **/
+        $('body').keyup(function(e){
+            if (!moving){
+                if(e.keyCode == 32){
+                    // user has pressed space
+                    $starting_message.css("opacity","0");
+                    $death_message.css("opacity", "0");
+                    moving = true;
+                    tick(); //call main loop
+                }
+            }
+        });
+        
+        /**
+        *override keydown repeat delay
+        *credit:
+        *https://stackoverflow.com/questions/11355595/is-it-possible-to-override-the-keydown-repeat-delay-in-javascript
+        **/
+        function DeltaTimer(render, interval) {
+            var timeout;
+            var lastTime;
+
+            this.start = start;
+            this.stop = stop;
+
+            function start() {
+                timeout = setTimeout(loop, 0);
+                lastTime = Date.now();
+                return lastTime;
+            }
+
+            function stop() {
+                clearTimeout(timeout);
+                return lastTime;
+            }
+
+            function loop() {
+                var thisTime = Date.now();
+                var deltaTime = thisTime - lastTime;
+                var delay = Math.max(interval - deltaTime, 0);
+                timeout = setTimeout(loop, delay);
+                lastTime = thisTime + delay;
+                render(thisTime);
+            }
+        }
+
+        (function (interval) {
+            var keyboard = {};
+
+            window.addEventListener("keyup", keyup, false);
+            window.addEventListener("keydown", keydown, false);
+
+            function keyup(event) {
+                keyboard[event.keyCode].pressed = false;
+            }
+
+            function keydown(event) {
+                var keyCode = event.keyCode;
+                var key = keyboard[keyCode];
+
+                if (key) {
+                    if (!key.start)
+                        key.start = key.timer.start();
+                    key.pressed = true;
+                } else {
+                    var timer = new DeltaTimer(function (time) {
+                        if (key.pressed) {
+                            var event = document.createEvent("Event");
+                            event.initEvent("keypressed", true, true);
+                            event.time = time - key.start;
+                            event.keyCode = keyCode;
+                            window.dispatchEvent(event);
+                        } else {
+                            key.start = 0;
+                            timer.stop();
+                        }
+                    }, interval);
+
+                    key = keyboard[keyCode] = {
+                        pressed: true,
+                        timer: timer
+                    };
+
+                    key.start = timer.start();
+                }
+            }
+        })(30);
+        //end credit
+
+
+        /**
+        *listen for arrow key input
+        **/
+        window.addEventListener("keypressed", function (event) {
+            if(moving){
+                switch (event.keyCode) {
+                    case 37:
+                        Xpos -=1;
+                        break;
+                    case 38:
+                        Ypos -= 1;
+                        break;
+                    case 39:
+                        Xpos += 1;
+                        break;
+                    case 40:
+                        Ypos += 1;
+                        break;
+                }
+            }
+
+        }, false);
+    }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
 });
