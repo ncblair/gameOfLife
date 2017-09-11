@@ -9,11 +9,128 @@ $(document).ready(function(){
     /**********************
     *set up new Game, Initialize game elements
     ***********************/
-    var board = new Board($("#game-field"), 3);
-    var user = new Player(true, 2, board, 1/5, 1/2);
-    var finish = new Finish(10, board, 4/5, 1/2);
+    var board = new Board($("#game-field"), 3, color);
+    var user = new Player(true, 1, board, 1/5, 1/2, "green");
+    var finish = new Finish(5, board, 4/5, 1/2, "gold");
     
+    //listen to the keyboard for arrow keys, spacebar input
     startListeningToKeyboard();
+    
+    var moving;//is the game in motion?
+    var count = 0;//how many iterations has the game performed?
+    
+    //set up users, score, to be sent to PHP(encapsulate later)
+    var $user = $(".user");
+    var username = setHighScoreName();
+    var $score = $(".score");
+    var highscore = setHighScore();
+    var $highscore = $(".highscore");
+	
+    //access the starting message for the game (encapsulate later)
+	var $starting_message = $(".starting-message");
+    var $death_message = $(".death-message");
+    
+    resetAll();
+    
+    /**
+    *prepare for a new game
+    **/
+    function resetAll() {
+        board.reset();
+        user.reset();
+        finish.reset();
+    }
+    
+    /**
+    *main loop
+    **/
+    function tick() {
+        setTimeout(function() {
+            board.drawBoard();
+            user.drawOnBoard();
+            
+        }, 20);
+    }
+    
+    
+    /**
+    *A Player of size WIDTH is an element that appears on and can 
+    *interact with a BOARD, but does not follow John Conway's GOL 
+    *rules. a player ISCONTROLLABLE if the user can control it. 
+    *STARTX and STARTY are multiplied by the BOARD's width and height 
+    *to determine the start position of the player
+    **/
+    function Player(isControllable, width, board, startX, startY, color) {
+        
+        this.xPos = startX*board.width();
+        this.yPos = startY*board.height();
+        this.isControllable = isControllable;
+        
+        this.moveX = function(howMuch) {
+            this.xPos += howMuch;
+        }
+        
+        this.moveY = function(howMuch) {
+            this.yPos += howMuch;
+        }
+        
+        /**
+        *draws player on the board around XPOS, YPOS
+        **/
+        this.drawOnBoard = function(){
+            var x;
+            var y;
+            for (var i = 0; i <= 2*width; i++) {
+                for (var j = 0; j <= 2*width; j++) {
+                    x = xPos - width + i;
+                    y = yPos - width + j;
+                    board.fillNode(x, y, color);
+                }
+            }
+        }
+        
+    }
+    
+    /**
+    *A Player of size WIDTH is an element that appears on and can 
+    *interact with a BOARD, but does not follow John Conway's GOL 
+    *rules. a player ISCONTROLLABLE if the user can control it. 
+    *STARTX and STARTY are multiplied by the BOARD's width and height 
+    *to determine the start position of the player
+    **/
+    function Finish(width, board, startX, startY, color) {
+        
+        this.xPos = startX*board.width();
+        this.yPos = startY*board.height();
+        
+        /**
+        *moves the finish to a random spot on the board
+        **/
+        this.randomMove() {
+            //Mul ensures the finish stays within the grid
+            var xMul = (board.width() - width - 1)/board.width();
+            var yMul = (board.height() - width - 1)/board.height();
+            this.xPos = xMul*Math.random()*board.width();
+            this.yPos = yMul*Math.random()*board.height();
+        }
+        
+        
+        /**
+        *draws player on the board around XPOS, YPOS
+        **/
+        this.drawOnBoard = function(){
+            var x;
+            var y;
+            for (var i = 0; i <= 2*width; i++) {
+                for (var j = 0; j <= 2*width; j++) {
+                    x = xPos - width + i;
+                    y = yPos - width + j;
+                    board.fillNode(x, y, color);
+                }
+            }
+        }
+        
+    }
     
     
     /**
@@ -22,7 +139,7 @@ $(document).ready(function(){
     *nodes on the screen. The board is represented and updated with 
     *two grids that mimic the dimensions of the canvas.
     **/
-    function Board($canvas, fillsize) {
+    function Board($canvas, fillsize, color) {
         
         /**
         *performs one iteration of grid update
@@ -81,7 +198,8 @@ $(document).ready(function(){
         
         
         /**
-        *fills the grid randomly leaving space around PLAYERS and *FINISHES
+        *fills the grid randomly leaving space around PLAYERS and 
+        *FINISHES
         **/
         this.fillRandom = function(players, finishes) {
             for (var j = 0; j < gridHeight; j++) { 
@@ -111,9 +229,28 @@ $(document).ready(function(){
         }
         
         
+        /**
+        *Draws the color COLOR nodes on the board
+        **/
+        this.drawBoard = function() {
+            $ctx.clearRect(0, 0, $canvas.height(), $canvas.width()); //this should clear the canvas ahead of each redraw
+            for (var j = 0; j < gridHeight; j++) { //iterate through rows
+                for (var k = 0; k < gridWidth; k++) { //iterate through columns
+                    if (theGrid[j][k] === 1) {
+                        this.fillNode(j, k, color);
+
+                    }
+                }
+            }
+        }
+        
+        this.fillNode = function(x, y, color) {
+            $ctx.fillStyle = color;
+            $ctx.fillRect(x*fillsize, y*fillsize, fillsize, fillsize);
+        }
+        
         
         var $ctx = $canvas[0].getContext("2d");
-        
         var gridHeight = Math.round($canvas.height()/fillsize);
         var gridWidth = Math.round($canvas.width()/fillsize);
         var mainGrid = createArray(gridWidth);
@@ -123,10 +260,7 @@ $(document).ready(function(){
         /**
         *fills FILLSIZE squared nodes around X, Y color COLOR.
         **/
-        function fillNode(x, y, fillsize, color) {
-            $ctx.fillStyle = color;
-            $ctx.fillRect(x*fillsize, y*fillsize, fillsize, fillsize);
-        }
+
         
         
         /**
@@ -141,42 +275,6 @@ $(document).ready(function(){
 	   }
         
     }
-    
-    
-    //declare variables
-    var $c = $("#game-field");
-	var $ctx = $c[0].getContext("2d");
-    var fillsize = 3;//amount of pixels per block on canvas
-	var gridHeight = Math.round($c.height()/fillsize);//amount of cells in the grid (height)
-	var gridWidth = Math.round($c.width()/fillsize);//amount of cells in the grid (width)
-    var $cHeight = $c.height();
-    var $cWidth = $c.width();
-    var Xpos;
-    var Ypos;//position on GRID
-    var Xstart = 45;
-    var Ystart = 75;
-    var moving;
-    var $user = $(".user");
-    var username = setHighScoreName();
-    var score;
-    var $score = $(".score");
-    var highscore = setHighScore();
-    var $highscore = $(".highscore");
-    var xFinishMinStart = Math.round(gridWidth/2) - 5;
-    var xFinishMaxStart = Math.round(gridWidth/2) + 5;
-    var yFinishMinStart = Math.round(gridHeight/2) - 5;
-    var yFinishMaxStart = Math.round(gridHeight/2) + 5;
-    var xFinishMin;
-    var xFinishMax;
-    var yFinishMin;
-    var yFinishMax;//position on GRID
-    
-	var theGrid = createArray(gridWidth);
-	var mirrorGrid = createArray(gridWidth);
-	$ctx.fillStyle = "red";
-	var count = 0;
-	var $starting_message = $(".starting-message");
-    var $death_message = $(".death-message");
     
     
     
@@ -460,14 +558,6 @@ $(document).ready(function(){
     
     
     
-    
-    
-    
-    
-    
-    
-    
-    
     /**
     *handles all user input
     **/
@@ -573,16 +663,16 @@ $(document).ready(function(){
             if(moving){
                 switch (event.keyCode) {
                     case 37:
-                        Xpos -=1;
+                        user.moveX(-1);
                         break;
                     case 38:
-                        Ypos -= 1;
+                        user.moveY(-1);
                         break;
                     case 39:
-                        Xpos += 1;
+                        user.moveX(1);
                         break;
                     case 40:
-                        Ypos += 1;
+                        user.moveY(1);
                         break;
                 }
             }
