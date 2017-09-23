@@ -9,7 +9,7 @@ $(document).ready(function(){
     /**********************
     *set up new Game, Initialize game elements
     ***********************/
-    var board = new Board($("#game-field"), 3, color);
+    var board = new Board($("#game-field"), 3, "red");
     var user = new Player(true, 1, board, 1/5, 1/2, "green");
     var finish = new Finish(5, board, 4/5, 1/2, "gold");
     
@@ -26,19 +26,25 @@ $(document).ready(function(){
     var highscore = setHighScore();
     var $highscore = $(".highscore");
 	
-    //access the starting message for the game (encapsulate later)
+    //access the s tarting message for the game (encapsulate later)
 	var $starting_message = $(".starting-message");
     var $death_message = $(".death-message");
     
-    resetAll();
+    resetAll([board], [user], [finish]);
     
     /**
     *prepare for a new game
     **/
-    function resetAll() {
-        board.reset();
-        user.reset();
-        finish.reset();
+    function resetAll(boards, players, finishes) {
+        for(var i = 0; i < boards.length; i++) {
+            boards[i].reset(players, finishes);
+        }
+        for(var i = 0; i < players.length; i++) {
+            players[i].reset();
+        }
+        for(var i = 0; i < finishes.length; i++) {
+            finishes[i].reset();
+        }
     }
     
     /**
@@ -89,6 +95,12 @@ $(document).ready(function(){
             }
         }
         
+        this.near = function(x, y, howClose) {
+            var nearX = (x - howClose) < this.xPos < (x + howClose);
+            var nearY = (y - howClose) < this.yPos < (y + howClose);
+            return nearX && nearY;
+        }
+        
     }
     
     /**
@@ -106,7 +118,7 @@ $(document).ready(function(){
         /**
         *moves the finish to a random spot on the board
         **/
-        this.randomMove() {
+        this.randomMove = function(){
             //Mul ensures the finish stays within the grid
             var xMul = (board.width() - width - 1)/board.width();
             var yMul = (board.height() - width - 1)/board.height();
@@ -144,26 +156,22 @@ $(document).ready(function(){
         /**
         *performs one iteration of grid update
         **/
-        this.updateGrid = function() {
+        this.updateGrid = function(players, finishes) {
             for (var j = 1; j < gridHeight - 1; j++) { //iterate through rows
                 for (var k = 1; k < gridWidth - 1; k++) { //iterate through columns
                     var totalCells = 0;
                     //add up the total values for the surrounding cells
-                    totalCells += theGrid[j - 1][k - 1]; //top left
-                    totalCells += theGrid[j - 1][k]; //top center
-                    totalCells += theGrid[j - 1][k + 1]; //top right
-
-                    totalCells += theGrid[j][k - 1]; //middle left
-                    totalCells += theGrid[j][k + 1]; //middle right
-
-                    totalCells += theGrid[j + 1][k - 1]; //bottom left
-                    totalCells += theGrid[j + 1][k]; //bottom center
-                    totalCells += theGrid[j + 1][k + 1]; //bottom right
-
+                    for (var i = j-1; i <= j + 1; i ++) {
+                        for (var h = k-1; h <= k + 1; h ++) {
+                            if (!(h == j && i == k)) {
+                                totalCells += mainGrid[h][k];
+                            }
+                        }
+                    }
                     //apply the rules to each cell
                     switch (totalCells) {
                         case 2:
-                            mirrorGrid[j][k] = theGrid[j][k];
+                            mirrorGrid[j][k] = mainGrid[j][k];
 
                             break;
                         case 3:
@@ -174,22 +182,23 @@ $(document).ready(function(){
                             mirrorGrid[j][k] = 0; //die
                     }
 
-                    if (nearFinish(j,k)){
-                        mirrorGrid[j][k] = 0;
+                    for (int i = 0; i <finishes.length; i ++) {
+                        if (finishes[i].near(j, k)) {
+                            mirrorGrid[j][k] = 0;
+                        }
                     }
 
                     if (onBorder(j,k)){
                         mirrorGrid[j][k] = 1;
                     }
-                    if (addChaos(j,k)){
+                    if (shouldAddChaos(j,k, players, finishes)){
                         mirrorGrid[j][k] = 1;
                     }
-
                 }
             }
 
             //swap grids
-            var temp = theGrid;
+            var temp = mainGrid;
             theGrid = mirrorGrid;
             mirrorGrid = temp;
         }
@@ -204,13 +213,18 @@ $(document).ready(function(){
         this.fillRandom = function(players, finishes) {
             for (var j = 0; j < gridHeight; j++) { 
                 for (var k = 0; k < gridWidth; k++) { 
-                    theGrid[j][k] = Math.round(Math.random() -.44);
-                    //avoid spawn point
-                    if (j > 20 && j < 70 && k > 50 && k < 100){
-                        theGrid[j][k] = 0;
+                    mainGrid[j][k] = Math.round(Math.random() - this.SPAWNRATE);
+                    //avoid players
+                    for(var i =0; i < players.length; i++) {
+                        if (players[i].near(j, k, 20)) {
+                            mainGrid[j][k] = 0;
+                        }
                     }
-                    if (nearFinish(j,k)){//avoid the finish point
-                        theGrid[j][k] = 0;
+                    //avoid finishes
+                    for(var i = 0; i < finishes.length; i++) {
+                        if (finishes[i].near(j, k, 20)) {
+                            mainGrid[j][k] = 0;
+                        }
                     }
                 }
             }
@@ -249,6 +263,15 @@ $(document).ready(function(){
             $ctx.fillRect(x*fillsize, y*fillsize, fillsize, fillsize);
         }
         
+        this.reset = function(players, finishes) {
+            this.fillRandom(players, finishes);
+            this.drawBoard();
+            
+        }
+        
+        
+        
+        this.SPAWNRATE = .44;
         
         var $ctx = $canvas[0].getContext("2d");
         var gridHeight = Math.round($canvas.height()/fillsize);
@@ -272,7 +295,29 @@ $(document).ready(function(){
                 arr[i] = [];
             }
             return arr;
-	   }
+        }
+        
+        function onBorder(x, y){
+            return x == 2 || x == gridHeight - 2 || y == 2 || y == gridHeight - 2;
+        }
+        
+        function shouldAddChaos(x, y, players, finishes){
+            var nearPlayerOrFinish;
+            for (int i = 0; i < players.length; i++) {
+                if (players[i].near(x, y)) {
+                    nearPlayerOrFinish = true;
+                }
+            }
+            for (int i = 0; i < finishes.length; i++) {
+                if (finishes[i].near(x, y)) {
+                    nearPlayerOrFinish = true;
+                }
+            }
+            if (!nearPlayerOrFinish){
+                return (Math.random()*Math.random()*Math.random() > .95);
+            }
+            return false;
+        }
         
     }
     
