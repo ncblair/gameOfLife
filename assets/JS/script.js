@@ -1,6 +1,5 @@
 //some of this code is inspired by http://disruptive-communications.com/conwaylifejavascript/
 
-
 $(document).ready(function(){
 	//check connection b/w JS and HTML
     console.log("connected");
@@ -36,13 +35,14 @@ $(document).ready(function(){
     *prepare for a new game
     **/
     function resetAll(boards, players, finishes) {
-        for(var i = 0; i < boards.length; i++) {
+        var i;
+        for(i = 0; i < boards.length; i++) {
             boards[i].reset(players, finishes);
         }
-        for(var i = 0; i < players.length; i++) {
+        for(i = 0; i < players.length; i++) {
             players[i].reset();
         }
-        for(var i = 0; i < finishes.length; i++) {
+        for(i = 0; i < finishes.length; i++) {
             finishes[i].reset();
         }
     }
@@ -50,11 +50,45 @@ $(document).ready(function(){
     /**
     *main loop
     **/
-    function tick() {
+    function tick(boards, players, finishes) {
         setTimeout(function() {
             board.drawBoard();
             user.drawOnBoard();
+            finish.drawOnBoard();
             
+            
+            
+            
+            console.time("loop");
+            $score.text(score);
+	        drawGrid();
+            drawPlayer();
+            drawFinish();
+            if (playerDies()){
+                $death_message.css("opacity", "1");
+                setHighScore();
+                setHighScoreName();
+                moving = false;
+                updateHighScore();
+                startOver();
+            }
+            //increase the players score, move finish, continue loop
+            if (playerWins()){
+                score += 1;
+                moveFinish();
+                updateGrid();
+                console.timeEnd("loop");
+                requestAnimationFrame(tick);
+                count +=1;
+            }
+            else{
+                if (moving){
+                    updateGrid();
+                    console.timeEnd("loop");
+                    requestAnimationFrame(tick);
+                    count +=1;
+                }
+            }
         }, 20);
     }
     
@@ -100,7 +134,7 @@ $(document).ready(function(){
             var nearY = (y - howClose) < this.yPos < (y + howClose);
             return nearX && nearY;
         }
-        
+        this.board = board;
     }
     
     /**
@@ -182,7 +216,7 @@ $(document).ready(function(){
                             mirrorGrid[j][k] = 0; //die
                     }
 
-                    for (int i = 0; i <finishes.length; i ++) {
+                    for (var i = 0; i < finishes.length; i ++) {
                         if (finishes[i].near(j, k)) {
                             mirrorGrid[j][k] = 0;
                         }
@@ -303,12 +337,12 @@ $(document).ready(function(){
         
         function shouldAddChaos(x, y, players, finishes){
             var nearPlayerOrFinish;
-            for (int i = 0; i < players.length; i++) {
+            for (var i = 0; i < players.length; i++) {
                 if (players[i].near(x, y)) {
                     nearPlayerOrFinish = true;
                 }
             }
-            for (int i = 0; i < finishes.length; i++) {
+            for (var i = 0; i < finishes.length; i++) {
                 if (finishes[i].near(x, y)) {
                     nearPlayerOrFinish = true;
                 }
@@ -347,9 +381,6 @@ $(document).ready(function(){
                 moving = false;
                 updateHighScore();
                 startOver();
-
-                
-                
             }
             //increase the players score, move finish, continue loop
             if (playerWins()){
