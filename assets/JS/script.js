@@ -6,12 +6,103 @@ var doc = $(document);
 var wndo = $(window);
 doc.ready(function () {
     "use strict";
+    
 });
 
 
 
 
-/*Abstract Classes*/
+/*Classes*/
+
+/*Attach to DOM*/
+class Welder {
+    
+}
+
+/*Update and Render*/
+
+//Update
+class Operator {
+    
+}
+
+//Render
+class Painter {
+    
+    //paintables are things that can be painted
+    constructor(...paintables, canvas, fillsize) {
+        this.paintables = paintables;
+        this.canvas = canvas;
+        this.fillsize = fillsize;
+    }
+    
+    paint() {
+        for (let object in this.paintables) {
+            object.paint();
+        }
+    }
+    
+    pixelsHigh() {
+        return Math.floor(this.canvas.height/fillsize);
+    }
+    
+    pixelsWide() {
+        return Math.floor(this.canvas.width/fillsize);
+    }
+}
+
+//Keep Time
+class TimeKeeper {
+    //delay is in ms, lower delay = faster clock
+    constructor(delay = 20) {
+        this.time = 0;
+        this.delay = delay;
+        this.prevTime = null;
+        this.timerID = null;
+    }
+    
+    getDelta() {
+        if (this.prevTime) {
+            return this.time - prevTime;
+        }
+        throw("Clock isn't running")
+    }
+    
+    startTheClock() {
+        var tick = function() {
+            this.time += 1;
+        }
+        this.timerID = setInterval(tick, delay);
+    }
+    
+    resetTheClock() {
+        if (this.timerID) {
+            this.time = 0;
+            clearInterval(timerID);
+            this.timerID = null;
+            this.prevTime = null;
+        }
+        else {
+            throw("Clock isn't running");
+        }
+    }
+    
+    speedUp(factor = 2/3) {
+        this.delay = Math.floor(this.delay*factor);
+    }
+    slowDown(factor = 2/3) {
+        this.delay = Math.floor(this.delay/factor);
+    }
+}
+
+//keep track of score, high scores, etc.
+class ScoreKeeper {
+    
+}
+
+
+
+
 
 /*States and StateMachine*/
 //Manage different states of my application
@@ -50,7 +141,7 @@ class State {
 }
 
 /*Game Elements*/
-//Manage different states of my application
+//Manage different objects of my application
 
 class Arena {
     constructor(players, finishes, width, height) {
@@ -72,14 +163,6 @@ class Villain extends Player {
         super(mysize, color, location);
     }
 }
-    
-class Player extends ArenaSquare {
-    //velocity is a vector(TUPLE) representing change in location
-    move(velocity) {
-        location.x += velocity.x;
-        location.y += velocity.y;
-    }
-}
 
 class Finish extends ArenaSquare {
     constructor(mysize = 2, color = "green", location) {
@@ -88,8 +171,18 @@ class Finish extends ArenaSquare {
 }
 
 class Landmine extends ArenaSquare {
+    //landmine's has property is on, s.t. if a landmine is on and a Player is on the same square, the player will lose health; else, not;
     constructor(mysize = 0, color = "red", location) {
+        this.isOn = false;
         super(mysize, color, location);
+    }
+    
+    activate() {
+        this.isOn = true;
+    }
+    
+    deactivate() {
+        this.isOn = false;
     }
 }
 
@@ -125,6 +218,7 @@ class Wall extends inArena {
             var occupied = new Set();
             
             var makeLineTailRecursive = function(mysize, startLoc, occupied) {
+                "use strict";
                 if (mysize < 0) {
                     return occupied;
                 }
@@ -139,6 +233,20 @@ class Wall extends inArena {
     }
 }
 
+    
+class Player extends ArenaSquare {
+    //velocity is a vector(TUPLE) representing change in location
+    constructor(mysize = 1, color = "gray", location) {
+        this.health = 1;
+        super(mysize, color, location);
+    }
+    move(velocity) {
+        location.x += velocity.x;
+        location.y += velocity.y;
+    }
+}
+
+
 class ArenaSquare extends inArena {
     constructor(mysize, color, location) {
         super(mysize, color, location, makeSquare);   
@@ -150,8 +258,6 @@ class ArenaSquare extends inArena {
     
     static makeSquare(mysize, startLoc) {
         var occupied = new Set();
-        //methinks iteration will be more efficient then a
-        //clunky tail recurisve implementation
         for (let i = mysize; i <= mysize; i++) {
             for (let j = -mysize; j <= mysize; j ++) {
                 occupied.add(new Point(startLoc.x + i, startLoc.y + j));
