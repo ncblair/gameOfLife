@@ -49,8 +49,9 @@ class State {
 //Manage different states of my application
 
 class Arena {
-    constructor(players, finishes) {
-        
+    constructor(players, finishes, width, height) {
+        this.players = players;
+        this.finishes = finishes;
     }
 }
 
@@ -68,7 +69,7 @@ class Villain extends Player {
     }
 }
     
-class Player extends ArenaElem {
+class Player extends ArenaSquare {
     constructor(size, color, location) {
         super(size, color, location);
     }
@@ -80,47 +81,104 @@ class Player extends ArenaElem {
     }
 }
 
-class Finish extends ArenaElem {
+class Finish extends ArenaSquare {
     constructor(size = 2, color = "green", location) {
         super(size, color, location);
     }
 }
 
-class Landmine extends ArenaElem {
+class Landmine extends ArenaSquare {
     constructor(size = 0, color = "red", location) {
         super(size, color, location);
     }
 }
 
-class ArenaElem {
-    constructor(size, color, location) {
-        this.size = size; //represents the distance from the center of the element
-        //size = 1 is a 3x3 elem, size = n is a (1 + 2n)x(1 +2n) elem
-        this.color = color;
-        this.location = location;
+class Wall extends inArena {
+    //direction is a char n, s, e, w (cardinal direction);
+    constructor(size, color = "white", startLoc, direction = 'n') {
+        this.direction = direction;
+        super(size, color, startLoc, lineInTheDirection());
     }
-    isTouching(that) {
-        for (let block in this.occupiedBlocks()) {
-            if (that.occupiedBlocks().has(block)) {
-                //they occupy the same block
-                return true
-            }
+    
+    //returns a function for occupied spaces of a line in direction = THIS.DIRECTION
+    lineInTheDirection() {
+        var changeX = 0;
+        var changeY = 0;
+        switch (this.direction) {
+            case 'n':
+                changeY = 1;
+                break;
+            case 's':
+                changeY = -1;
+                break;
+            case 'e':
+                changeX = 1;
+                break;
+            //west is default
+            default:
+                changeX = -1;
+                
         }
-        return false;
+        var makeLine = function(size, startLoc) {
+            var occupied = new Set();
+            var i;
+            for (i = 0; i < size; i++) {
+                occupied.add(new Point(startLoc.x + changeX, startLoc.y + changeY));
+            }
+            return occupied;
+        }
+        
+        return makeLine;
+    }
+}
+
+class ArenaSquare extends inArena {
+    constructor(size, color, location) {
+        super(size, color, location, makeSquare);   
     }
     
     distanceTo(that) {
-        return this.location.distanceTo(that.location);
+        return this.location.distanceTo(that.location) - this.size;
     }
     
-    occupiedBlocks() {
+    static makeSquare(siz, startLoc) {
         var occupied = new Set();
-        for (let i = -this.size; i <= this.size; i++) {
-            for (let j = -this.size; j <= this.size; j ++) {
-                occupied.add(new Point(this.location.x + i, this.location.y + j));
+        for (let i = siz; i <= siz; i++) {
+            for (let j = -siz; j <= siz; j ++) {
+                occupied.add(new Point(startLoc.x + i, startLoc.y + j));
             }
         }
         return occupied;
+    }
+}
+
+class inArena {
+    constructor(size, color, startLoc, occupiedFunc) {
+        this.size = size;
+        this.color = color;
+        this.startLoc = startLoc;
+        this.occupiedFunc = occupiedFunc;
+    }
+    
+    isTouching(that) {
+        return distanceTo(that) <= 0;
+    }
+    
+    //very slow, brute force, but inclusive min-distance function
+    distanceTo(that) {
+        var minDistance = Number.MAX_VALUE;
+        for (let thisBlock in this.occupiedBlocks()) {
+            for (let thatBlock in that.occupiedBlocks()) {
+                if (thisBlock.distanceTo(thatBlock) < minDistance) {
+                    minDistance = thisBlock.distanceTo(thatBlock);
+                }
+            }
+        }
+        return minDistance;
+    }
+    
+    occupiedBlocks() {
+        return this.occupiedFunc(this.size, this.startLoc);
     }
 }
 
@@ -128,8 +186,10 @@ class Point extends Tuple{
     constructor(x, y) {
         super(x, y);
     }
+    
+    //distance, can only move two directions
     distanceTo(point) {
-        return Math.sqrt((this.x - x)(this.x - x) + (this.y - y)(this.y -y));
+        return Math.abs(this.x - x) + Math.abs(this.y - y);
     }
 }
 
