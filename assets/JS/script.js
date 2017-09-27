@@ -1,7 +1,11 @@
+/*author: Nathan Blair, nathanblair.me*/
+/*jslint browser: true*/
+/*global $, jQuery, alert*/
+
 var doc = $(document);
 var wndo = $(window);
-doc.ready(function() {
-    
+doc.ready(function () {
+    "use strict";
 });
 
 
@@ -12,7 +16,7 @@ doc.ready(function() {
 /*States and StateMachine*/
 //Manage different states of my application
 class StateMachine {
-    constructor(states = new Set([])) {
+    constructor(states = new Set()) {
         this.currentState = null;
         this.states = states;
     }
@@ -57,23 +61,19 @@ class Arena {
 
 
 class User extends Player {
-    constructor(size = 1, color = "blue", location) {
-        super(size, color, location);
+    constructor(mysize = 1, color = "blue", location) {
+        super(mysize, color, location);
     }
     
 }
 
 class Villain extends Player {
-    constructor(size = 1, color = "gray", location) {
-        super(size, color, location);
+    constructor(mysize = 1, color = "gray", location) {
+        super(mysize, color, location);
     }
 }
     
 class Player extends ArenaSquare {
-    constructor(size, color, location) {
-        super(size, color, location);
-    }
-    
     //velocity is a vector(TUPLE) representing change in location
     move(velocity) {
         location.x += velocity.x;
@@ -82,22 +82,23 @@ class Player extends ArenaSquare {
 }
 
 class Finish extends ArenaSquare {
-    constructor(size = 2, color = "green", location) {
-        super(size, color, location);
+    constructor(mysize = 2, color = "green", location) {
+        super(mysize, color, location);
     }
 }
 
 class Landmine extends ArenaSquare {
-    constructor(size = 0, color = "red", location) {
-        super(size, color, location);
+    constructor(mysize = 0, color = "red", location) {
+        super(mysize, color, location);
     }
 }
 
 class Wall extends inArena {
     //direction is a char n, s, e, w (cardinal direction);
-    constructor(size, color = "white", startLoc, direction = 'n') {
+    //mysize is 0 indexed, mysize = 5 implies a 6 unit wall.
+    constructor(mysize, color = "white", startLoc, direction = 'n') {
         this.direction = direction;
-        super(size, color, startLoc, lineInTheDirection());
+        super(mysize, color, startLoc, lineInTheDirection());
     }
     
     //returns a function for occupied spaces of a line in direction = THIS.DIRECTION
@@ -119,13 +120,19 @@ class Wall extends inArena {
                 changeX = -1;
                 
         }
-        var makeLine = function(size, startLoc) {
+        //tail recursive optimized function
+        var makeLine = function(mysize, startLoc) {
             var occupied = new Set();
-            var i;
-            for (i = 0; i < size; i++) {
-                occupied.add(new Point(startLoc.x + changeX, startLoc.y + changeY));
+            
+            var makeLineTailRecursive = function(mysize, startLoc, occupied) {
+                if (mysize < 0) {
+                    return occupied;
+                }
+                occupied.add(new Point(startLoc.x + mysize*changeX, startLoc.y + mysize*changeY));
+                return makeLineTailRecursive(mysize - 1, startLoc, occupied);
             }
-            return occupied;
+            
+            return makeLineTailRecursive(mysize, startLoc, occupied);
         }
         
         return makeLine;
@@ -133,18 +140,20 @@ class Wall extends inArena {
 }
 
 class ArenaSquare extends inArena {
-    constructor(size, color, location) {
-        super(size, color, location, makeSquare);   
+    constructor(mysize, color, location) {
+        super(mysize, color, location, makeSquare);   
     }
     
     distanceTo(that) {
-        return this.location.distanceTo(that.location) - this.size;
+        return this.location.distanceTo(that.location) - this.mysize;
     }
     
-    static makeSquare(siz, startLoc) {
+    static makeSquare(mysize, startLoc) {
         var occupied = new Set();
-        for (let i = siz; i <= siz; i++) {
-            for (let j = -siz; j <= siz; j ++) {
+        //methinks iteration will be more efficient then a
+        //clunky tail recurisve implementation
+        for (let i = mysize; i <= mysize; i++) {
+            for (let j = -mysize; j <= mysize; j ++) {
                 occupied.add(new Point(startLoc.x + i, startLoc.y + j));
             }
         }
@@ -153,11 +162,12 @@ class ArenaSquare extends inArena {
 }
 
 class inArena {
-    constructor(size, color, startLoc, occupiedFunc) {
-        this.size = size;
+    constructor(mysize, color, startLoc, occupiedFunc) {
+        this.mysize = mysize;
         this.color = color;
         this.startLoc = startLoc;
         this.occupiedFunc = occupiedFunc;
+        this.occupiedBlocks = occupiedBlocks();
     }
     
     isTouching(that) {
@@ -166,6 +176,7 @@ class inArena {
     
     //very slow, brute force, but inclusive min-distance function
     distanceTo(that) {
+        
         var minDistance = Number.MAX_VALUE;
         for (let thisBlock in this.occupiedBlocks()) {
             for (let thatBlock in that.occupiedBlocks()) {
@@ -178,7 +189,11 @@ class inArena {
     }
     
     occupiedBlocks() {
-        return this.occupiedFunc(this.size, this.startLoc);
+        return this.occupiedFunc(this.mysize, this.startLoc);
+    }
+    
+    spaceOccupied() {
+        return this.occupiedBlocks.size;
     }
 }
 
