@@ -2,11 +2,18 @@
 /*jslint browser: true*/
 /*global $, jQuery, alert*/
 
+//connect to DOM, declare constants;
 var doc = $(document);
 var wndo = $(window);
+var canvas = $("#game-field");
+var fillsize = 3;
+var gridHeight = Math.floor(this.canvas.height / fillsize);
+var gridWidth = Math.floor(this.canvas.width / fillsize);
+var scorefield = $(".score");
+var highscorefield = $(".highscore");
 doc.ready(function () {
     "use strict";
-    
+    var engine = new Engine();
 });
 
 
@@ -14,32 +21,152 @@ doc.ready(function () {
 
 /*Classes*/
 
-/*Attach to DOM*/
-class Welder {
+
+/*States and StateMachine*/
+//Manage different states of my application
+class StateMachine {
+    constructor(states = new Set()) {
+        this.currentState = null;
+        this.states = states;
+    }
+    addState(state) {
+        this.states.add(state);
+    }
+    deleteState(state) {
+        this.states.delete(state);
+    }
     
+    changeState(nextState) {
+        console.log("changing to %s \n", nextState);
+        if (this.currentState) {
+            this.currentState.leave();
+            this.currentState = null;
+        }
+        for (let state of this.states) {
+            if (state.name == nextState) {
+                this.currentState = state;
+                this.currentState.enter();
+            }
+        }
+    }
+    nextState() {
+        if (this.currentState == null) {
+            throw "Can't call next state on null";
+        }
+        changeState(this.currentState.next);
+    }
+}
+
+class State {
+    constructor(name, next, elements, painters) {
+        this.name = name;
+        this.next = next;
+        this.elements = elements;
+        this.painters = painters;
+    }
+    
+    enter() {
+        console.log("entering state %s", this.name);
+    }
+    
+    leave() {
+        console.log("leaving state %s", this.name);
+    }
+}
+
+class HomeView extends State {
+    constructor(elements, painters) {
+        super("home", "game", elements, painters);
+    }
+    
+    enter() {
+        super.enter();
+        var startSolo = new TextBox(new Point(10, 10), 100, 50, "Solo");
+        var startBattle = new TextBox(new Point(10, 70), 100, 50, "Battle");
+        var color = new TextBox(new Point(10, 130), 100, 50, "Color");
+        this.elements.push(...[startSolo, startBattle, color]);
+        this.painters.push(new HomePainter(...this.elements));
+        
+    }
+    
+    leave() {
+        super.leave();
+        this.painters.length = 0;
+        this.elements.length = 0;
+    }
+}
+
+class GameView extends State {
+    constructor(elements, painters) {
+        super("game", "home", elements, painters);
+
+    }
+    enter() {
+        super.enter();
+        var user = new User(new Point(50, 100));
+        var finish = new Finish(new Point(200, 100));
+        this.elements.push(user, finish);
+        for (let i = 0; i < gridHeight*gridWidth; i++) {
+            let mineLoc = new Point(i % gridWidth, Math.floor(i / gridHeight));
+            this.elements.push(new Landmine(mineLoc));
+        }
+        this.painters[0] = new GamePainter(...this.elements);
+        
+    }
+    
+    leave() {
+        super.leave();
+        this.painters.length = 0;
+        this.elements.length = 0;
+    }
 }
 
 /*Update and Render*/
 
-//Update
-class Operator {
-    
+//Game Engine
+class Engine {
+    constructor() {
+        this.elements = [];
+        this.painters = [];
+        this.conductor = new StateMachine();
+        this.conductor.addState(new HomeView(this.elements, this.painters));
+        this.conductor.addState(new GameView(this.elements, this.painters));
+        this.conductor.changeState("home");
+        console.log("after state set");
+        this.render();
+        setInterval(this.update.bind(this), 20);
+    }
+    update() {
+        for (let element of this.elements) {
+            //element.update();
+            console.log("updating elements");
+        }
+    }
+    render() {
+        requestAnimationFrame(this.render.bind(this));
+        if (this.painters[0]) {
+            this.painters[0].paint();
+        }
+        else {
+            throw "No Defined Painter";
+        }
+    }
+
 }
 
-//Render
+//Abstract Painter, Renders Canvas
 class Painter {
     
     //paintables are things that can be painted
-    constructor(...paintables, canvas, fillsize) {
+    constructor(...paintables) {
         this.paintables = paintables;
         this.canvas = canvas;
+        this.context = canvas[0].getContext("2d");
         this.fillsize = fillsize;
     }
     
     paint() {
-        for (let object in this.paintables) {
-            object.paint();
-        }
+        throw "Abstract Painter cannot paint"
     }
     
     pixelsHigh() {
@@ -50,6 +177,42 @@ class Painter {
         return Math.floor(this.canvas.width/fillsize);
     }
 }
+
+//only knows how to paint home objects
+class HomePainter extends Painter{
+    paint() {
+        var instr;
+        for (let object of this.paintables) {
+            instr = object.getPaintInstructions();
+            switch (instr[0]) {
+                case "Box":
+                    this.context.fillStyle = instr[1];
+                    this.context.fillRect(instr[2].x, instr[2].y, instr[3], instr[4]);
+                case "TextBox":
+                    this.context.fillStyle = instr[1];
+                    this.context.fillRect(instr[2].x, instr[2].y, instr[3], instr[4]);
+                    this.context.font = instr[5];
+                    this.context.fillText(instr[6], instr[2].x + 10, instr[2].y + 10);
+            }
+        }
+    }
+}
+        
+//only knows how to paint game elements
+class GamePainter extends Painter{
+    paint() {
+        var instr;
+        for (let object of this.paintables) {
+            instr = object.getPaintInstructions();
+            for (let block of instr[2]) {
+                this.context.fillStyle = instr[1];
+                this.context.fillRect(block.x*fillsize, block.y*fillsize, fillsize, fillsize);
+            }
+        }
+    }
+}
+
+
 
 //Keep Time
 class TimeKeeper {
@@ -63,16 +226,19 @@ class TimeKeeper {
     
     getDelta() {
         if (this.prevTime) {
-            return this.time - prevTime;
+            var returnVal = this.time - prevTime;
+            this.prevTime = this.time;
+            return returnVal;
         }
         throw("Clock isn't running")
     }
     
     startTheClock() {
+        this.prevTime = 0;
         var tick = function() {
             this.time += 1;
         }
-        this.timerID = setInterval(tick, delay);
+        this.timerID = setInterval(tick.bind(this), delay);
     }
     
     resetTheClock() {
@@ -100,98 +266,91 @@ class ScoreKeeper {
     
 }
 
-
-
-
-
-/*States and StateMachine*/
-//Manage different states of my application
-class StateMachine {
-    constructor(states = new Set()) {
-        this.currentState = null;
-        this.states = states;
-    }
-    addState(state) {
-        this.states.add(state);
-    }
-    deleteState(state) {
-        this.states.delete(state);
-    }
     
-    changeState(nextState) {
-        if (this.currentState) {
-            this.currentState.leave();
-        }
-        this.currentState = nextState;
-        this.currentState.enter();
+class Paintable {
+    constructor(paintType, colr) {
+        this.paintType = paintType;
+        this.colr;
+        this.paintInstructions = this.getPaintInstructions();
+    }
+    getPaintInstructions() {
+        return [this.paintType, this.colr];
     }
 }
-
-class State {
-    constructor(name) {
-        this.name = name;
-    }
     
-    leave() {
-        console.log("leaving state %s", name);
-    }
-    enter() {
-        console.log("entering state %s", name);
-    }
-}
-
 /*Game Elements*/
 //Manage different objects of my application
 
-class Arena {
-    constructor(players, finishes, width, height) {
-        this.players = players;
-        this.finishes = finishes;
+class InArena extends Paintable{
+    constructor(mysize, colr, startLoc, occupiedFunc) {
+        super("Pixels", colr);
+        this.mysize = mysize;
+        this.startLoc = startLoc;
+        this.occupiedFunc = occupiedFunc;
+        this.occupiedBlocks = this.occupiedBlocks();
+        this.paintInstructions = this.getPaintInstructions();
+    }
+    
+    isTouching(that) {
+        return distanceTo(that) <= 0;
+    }
+    
+    //very slow, brute force, but inclusive min-distance function
+    distanceTo(that) {
+        
+        var minDistance = Number.MAX_VALUE;
+        for (let thisBlock of this.occupiedBlocks()) {
+            for (let thatBlock of that.occupiedBlocks()) {
+                if (thisBlock.distanceTo(thatBlock) < minDistance) {
+                    minDistance = thisBlock.distanceTo(thatBlock);
+                }
+            }
+        }
+        return minDistance;
+    }
+    
+    occupiedBlocks() {
+        return this.occupiedFunc(this.mysize, this.startLoc);
+    }
+    
+    spaceOccupied() {
+        return this.occupiedBlocks.size;
+    }
+    getPaintInstructions() {
+        var instructions = super.getPaintInstructions();
+        instructions[0] = this.paintType;
+        instructions.push(this.occupiedBlocks);
+        return instructions;
     }
 }
 
-
-class User extends Player {
-    constructor(mysize = 1, color = "blue", location) {
-        super(mysize, color, location);
+class ArenaSquare extends InArena {
+    constructor(mysize, colr, location) {
+        function makeSquare(mysize, startLoc) {
+            var occupied = new Set();
+            for (let i = mysize; i <= mysize; i++) {
+                for (let j = -mysize; j <= mysize; j ++) {
+                    occupied.add(new Point(startLoc.x + i, startLoc.y + j));
+                }
+            }
+            return occupied;
+        }
+        
+        super(mysize, colr, location, makeSquare);   
+    }
+    
+    distanceTo(that) {
+        return this.location.distanceTo(that.location) - this.mysize;
     }
     
 }
 
-class Villain extends Player {
-    constructor(mysize = 1, color = "gray", location) {
-        super(mysize, color, location);
-    }
-}
-
-class Finish extends ArenaSquare {
-    constructor(mysize = 2, color = "green", location) {
-        super(mysize, color, location);
-    }
-}
-
-class Landmine extends ArenaSquare {
-    //landmine's has property is on, s.t. if a landmine is on and a Player is on the same square, the player will lose health; else, not;
-    constructor(mysize = 0, color = "red", location) {
-        this.isOn = false;
-        super(mysize, color, location);
-    }
-    
-    activate() {
-        this.isOn = true;
-    }
-    
-    deactivate() {
-        this.isOn = false;
-    }
-}
-
-class Wall extends inArena {
+class Wall extends InArena {
     //direction is a char n, s, e, w (cardinal direction);
     //mysize is 0 indexed, mysize = 5 implies a 6 unit wall.
-    constructor(mysize, color = "white", startLoc, direction = 'n') {
+    constructor(mysize, startLoc, direction = 'n') {
         this.direction = direction;
-        super(mysize, color, startLoc, lineInTheDirection());
+        super(mysize, "white", startLoc, this.lineInTheDirection());
     }
     
     //returns a function for occupied spaces of a line in direction = THIS.DIRECTION
@@ -200,10 +359,10 @@ class Wall extends inArena {
         var changeY = 0;
         switch (this.direction) {
             case 'n':
-                changeY = 1;
+                changeY =  -1;
                 break;
             case 's':
-                changeY = -1;
+                changeY = 1;
                 break;
             case 'e':
                 changeX = 1;
@@ -233,12 +392,33 @@ class Wall extends inArena {
     }
 }
 
+class Landmine extends ArenaSquare {
+    //landmine's has property is on, s.t. if a landmine is on and a Player is on the same square, the player will lose health; else, not;
+    constructor(location, mysize = 0) {
+        this.isOn = false;
+        super(mysize, "red", location);
+    }
     
+    activate() {
+        this.isOn = true;
+    }
+    
+    deactivate() {
+        this.isOn = false;
+    }
+}
+
+class Finish extends ArenaSquare {
+    constructor(location, mysize = 2) {
+        super(mysize, "green", location);
+    }
+}
+
 class Player extends ArenaSquare {
     //velocity is a vector(TUPLE) representing change in location
-    constructor(mysize = 1, color = "gray", location) {
+    constructor(colr, location, mysize = 1) {
+        super(mysize, colr, location);
         this.health = 1;
-        super(mysize, color, location);
     }
     move(velocity) {
         location.x += velocity.x;
@@ -246,60 +426,69 @@ class Player extends ArenaSquare {
     }
 }
 
+class User extends Player {
+    constructor(location, mysize = 1) {
+        super(mysize, "blue", location);
+    }
+    
+}
 
-class ArenaSquare extends inArena {
-    constructor(mysize, color, location) {
-        super(mysize, color, location, makeSquare);   
-    }
-    
-    distanceTo(that) {
-        return this.location.distanceTo(that.location) - this.mysize;
-    }
-    
-    static makeSquare(mysize, startLoc) {
-        var occupied = new Set();
-        for (let i = mysize; i <= mysize; i++) {
-            for (let j = -mysize; j <= mysize; j ++) {
-                occupied.add(new Point(startLoc.x + i, startLoc.y + j));
-            }
-        }
-        return occupied;
+class Villain extends Player {
+    constructor(location, mysize = 1) {
+        super(mysize, "gray", location);
     }
 }
 
-class inArena {
-    constructor(mysize, color, startLoc, occupiedFunc) {
-        this.mysize = mysize;
-        this.color = color;
-        this.startLoc = startLoc;
-        this.occupiedFunc = occupiedFunc;
-        this.occupiedBlocks = occupiedBlocks();
+
+    
+/*Home Elements*/
+
+class InHome extends Paintable{
+    constructor(topLeft, colr, bwidth, bheight) {
+        super("Box", colr);
+        this.topLeft = topLeft;
+        this.bwidth = bwidth;
+        this.bheight = bheight;
+        this.paintInstructions = this.getPaintInstructions();
+    }
+    getPaintInstructions() {
+        var instructions = super.getPaintInstructions();
+        instructions[0] = this.paintType;
+        instructions.push(this.topLeft);
+        instructions.push(this.bwidth);
+        instructions.push(this.bheight);
+        return instructions;
     }
     
-    isTouching(that) {
-        return distanceTo(that) <= 0;
+    update() {
+        return;
     }
-    
-    //very slow, brute force, but inclusive min-distance function
-    distanceTo(that) {
-        
-        var minDistance = Number.MAX_VALUE;
-        for (let thisBlock in this.occupiedBlocks()) {
-            for (let thatBlock in that.occupiedBlocks()) {
-                if (thisBlock.distanceTo(thatBlock) < minDistance) {
-                    minDistance = thisBlock.distanceTo(thatBlock);
-                }
-            }
-        }
-        return minDistance;
+}
+
+class TextBox extends InHome {
+    constructor(topLeft, colr, bwidth, bheight, text, font = "30px Arial") {
+        super(topLeft, colr, bwidth, bheight);
+        this.paintType = "TextBox";
+        this.font = font;
+        this.text = text;
+        this.paintInstructions = this.getPaintInstructions();
     }
-    
-    occupiedBlocks() {
-        return this.occupiedFunc(this.mysize, this.startLoc);
+    getPaintInstructions() {
+        var instructions = super.getPaintInstructions();
+        instructions[0] = this.paintType;
+        instructions.push(this.font);
+        instructions.push(this.text);
+        return instructions;
     }
+}
     
-    spaceOccupied() {
-        return this.occupiedBlocks.size;
+    
+/*General Helpers*/
+
+class Tuple{
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
     }
 }
 
@@ -314,18 +503,8 @@ class Point extends Tuple{
     }
 }
 
-class Tuple{
-    constructor(x, y) {
-        this.x = x;
-        this.y = y;
-    }
-}
-    
-    
-    
-    
-    
-    
+
+
     
     
     
