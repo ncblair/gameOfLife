@@ -81,9 +81,9 @@ class HomeView extends State {
     
     enter() {
         super.enter();
-        var startSolo = new TextBox(new Point(10, 10), 100, 50, "Solo");
-        var startBattle = new TextBox(new Point(10, 70), 100, 50, "Battle");
-        var color = new TextBox(new Point(10, 130), 100, 50, "Color");
+        var startSolo = new TextBox(new Point(100, 50), "yellow", 300, 50, "Solo");
+        var startBattle = new TextBox(new Point(100, 210), "blue", 300, 50, "Battle");
+        var color = new TextBox(new Point(100, 370), "red", 300, 50, "Color");
         this.elements.push(...[startSolo, startBattle, color]);
         this.painters.push(new HomePainter(...this.elements));
         
@@ -189,10 +189,12 @@ class HomePainter extends Painter{
                     this.context.fillStyle = instr[1];
                     this.context.fillRect(instr[2].x, instr[2].y, instr[3], instr[4]);
                 case "TextBox":
+                    console.log(instr);
                     this.context.fillStyle = instr[1];
                     this.context.fillRect(instr[2].x, instr[2].y, instr[3], instr[4]);
+                    this.context.fillStyle = "black";
                     this.context.font = instr[5];
-                    this.context.fillText(instr[6], instr[2].x + 10, instr[2].y + 10);
+                    this.context.fillText(instr[6], instr[2].x + 110, instr[2].y + 30);
             }
         }
     }
@@ -270,7 +272,7 @@ class ScoreKeeper {
 class Paintable {
     constructor(paintType, colr) {
         this.paintType = paintType;
-        this.colr;
+        this.colr = colr;
         this.paintInstructions = this.getPaintInstructions();
     }
     getPaintInstructions() {
