@@ -11,6 +11,7 @@ var gridHeight = Math.floor(this.canvas.height / fillsize);
 var gridWidth = Math.floor(this.canvas.width / fillsize);
 var scorefield = $(".score");
 var highscorefield = $(".highscore");
+
 doc.ready(function () {
     "use strict";
     var engine = new Engine();
@@ -20,6 +21,97 @@ doc.ready(function () {
 
 
 /*Classes*/
+
+
+//manages the canvas, 
+//adds functionality
+class Canvas {
+    
+    constructor(canvas) {
+        this.canvas = canvas;
+        this.context = canvas[0].getContext("2d");
+    }
+    
+    //is (X, Y) on the canvas
+    screenPositionOnCanvas(x, y) {
+        var cRect = this.positionOnScreen();
+        return screenPositionOnRect(cRect);
+    }
+    
+    screenPositionOnRect(x, y, rect) {
+        return (rect.top < y && rect.bottom > y && rect.left < x && rect.right > x);
+    }
+    //gets the position of the mouse at screenX and screenY
+    //relative to the canvas
+    canvasPosition(screenX, screenY) {
+        var cRect = this.positionOnScreen();
+        if screenPositionOnCanvas(screenX, screenY) {
+            return new Point(screenX - cRect.left, screenY - cRect.top);
+        } else {
+            throw "mouse clicked off canvas";
+        }
+    }
+    
+    //returns a rectangle object;
+    positionOnScreen() {
+        var rect = this.canvas.getBoundingClientRect();
+    }
+    
+    height() {
+        return this.canvas.height();
+    }
+    
+    width() {
+        return this.canvas.width();
+    }
+    
+}
+
+
+
+//Handling User Input with the Canvas
+class ChainOfResponsibility {
+    constructor(state, handlers = []) {
+        this.state = state;
+        this.handlers = handlers;
+        this.canPropagate;
+    }
+    
+    delegateJob(data) {
+        for (let handler of this.handlers) {
+            if (this.canPropagate) {
+                (handler.execute(this, data));
+            }
+            else {
+                //handler picked up job
+                break;
+            }
+        }
+    }
+    
+    stopPropogation() {
+        this.canPropagate = false;
+    }
+    
+    addHandler(handler) {
+        this.handlers.push(handler);
+    }
+    
+}
+
+// "abstract" class
+class Handler {
+    execute(chain, data) {
+        return;
+    }
+}
+
+class HomeHandler extends Handler{
+    execute(chain, data) {
+        if(chain.)
+    }
+}
+
 
 
 /*States and StateMachine*/
@@ -169,17 +261,29 @@ class Painter {
         throw "Abstract Painter cannot paint"
     }
     
+    //returns the top left coordinate for an item of
+    //width W and height H so that the item is centered
+    center(w, h) {
+        var x = Math.floor((this.canvas.width() - w)/2);
+        var y = Math.floor((this.canvas.height() - h)/2);
+        return new Point(x, y);
+    }
+    
     pixelsHigh() {
-        return Math.floor(this.canvas.height/fillsize);
+        return Math.floor(this.canvas.height()/fillsize);
     }
     
     pixelsWide() {
-        return Math.floor(this.canvas.width/fillsize);
+        return Math.floor(this.canvas.width()/fillsize);
     }
 }
 
 //only knows how to paint home objects
 class HomePainter extends Painter{
+    
+    //this method is really messy, I know...
+    //redesign coming soon, procrastinating
+    //in the name of rapid development
     paint() {
         var instr;
         for (let object of this.paintables) {
@@ -188,13 +292,18 @@ class HomePainter extends Painter{
                 case "Box":
                     this.context.fillStyle = instr[1];
                     this.context.fillRect(instr[2].x, instr[2].y, instr[3], instr[4]);
+                    break;
                 case "TextBox":
                     console.log(instr);
                     this.context.fillStyle = instr[1];
-                    this.context.fillRect(instr[2].x, instr[2].y, instr[3], instr[4]);
+                    var cen = this.center(instr[3], instr[4]);
+                    console.log(cen.x);
+                    this.context.fillRect(cen.x, instr[2].y, instr[3], instr[4]);
                     this.context.fillStyle = "black";
                     this.context.font = instr[5];
-                    this.context.fillText(instr[6], instr[2].x + 110, instr[2].y + 30);
+                    this.context.textAlign = "center";
+                    this.context.fillText(instr[6], this.canvas.width()/2, instr[2].y + 35);
+                    break;
             }
         }
     }
@@ -214,54 +323,6 @@ class GamePainter extends Painter{
     }
 }
 
-
-
-//Keep Time
-class TimeKeeper {
-    //delay is in ms, lower delay = faster clock
-    constructor(delay = 20) {
-        this.time = 0;
-        this.delay = delay;
-        this.prevTime = null;
-        this.timerID = null;
-    }
-    
-    getDelta() {
-        if (this.prevTime) {
-            var returnVal = this.time - prevTime;
-            this.prevTime = this.time;
-            return returnVal;
-        }
-        throw("Clock isn't running")
-    }
-    
-    startTheClock() {
-        this.prevTime = 0;
-        var tick = function() {
-            this.time += 1;
-        }
-        this.timerID = setInterval(tick.bind(this), delay);
-    }
-    
-    resetTheClock() {
-        if (this.timerID) {
-            this.time = 0;
-            clearInterval(timerID);
-            this.timerID = null;
-            this.prevTime = null;
-        }
-        else {
-            throw("Clock isn't running");
-        }
-    }
-    
-    speedUp(factor = 2/3) {
-        this.delay = Math.floor(this.delay*factor);
-    }
-    slowDown(factor = 2/3) {
-        this.delay = Math.floor(this.delay/factor);
-    }
-}
 
 //keep track of score, high scores, etc.
 class ScoreKeeper {
@@ -451,6 +512,7 @@ class InHome extends Paintable{
         this.topLeft = topLeft;
         this.bwidth = bwidth;
         this.bheight = bheight;
+        
         this.paintInstructions = this.getPaintInstructions();
     }
     getPaintInstructions() {

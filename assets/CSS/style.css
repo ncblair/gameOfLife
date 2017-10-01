@@ -19,7 +19,7 @@ body{
     width:600px;
     display:inline-block;
     vertical-align:middle;
-    background-color:black;
+    background-color:white;
 }
 
 .canvas-container:before {    /* create a full-height inline block pseudo=element */
