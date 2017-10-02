@@ -1,13 +1,5 @@
 *{padding:0; margin:0; font-family:sans-serif;}
 
-.action-bar{
-    text-align:center;
-    min-width:800px;
-    width:100%;
-    height:40px;
-    background-color:black;
-    position:fixed;
-}
 body{
     position:absolute;
     height:100%;
@@ -33,43 +25,4 @@ body{
     width:100%;
     height:100%;
     text-align:center;
-}
-
-
-.navitem{
-    font-weight:bolder;
-    color:white;
-    font-size:20px;
-    vertical-align:middle;
-    display:inline-block;
-    line-height:40px;
-    margin-left:30px;
-    margin-right:30px;
-    padding-left:30px;
-    padding-right:30px;
-}
-
-.starting-message{
-    color:white;
-    font-size:80px;
-    font-weight:bolder;
-    text-align:center;
-    position:fixed;
-    display:inline-block;
-    width:100%;
-    z-index:2;
-    top:40%;
-}
-
-.death-message{
-    color:white;
-    font-size:80px;
-    font-weight:bolder;
-    text-align:center;
-    position:fixed;
-    display:inline-block;
-    width:100%;
-    z-index:2;
-    top:40%;
-    opacity:0;
 }

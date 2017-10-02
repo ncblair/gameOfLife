@@ -2,11 +2,14 @@
 /*jslint browser: true*/
 /*global $, jQuery, alert*/
 
-//connect to DOM, declare constants;
 
 $(document).ready(function () {
     "use strict";
-    var canvas = new Canvas($("#game-field"));
+    var c = document.getElementById('game-field');
+    var cWidth = c.width;
+    var cHeight = c.height;
+    
+    var canvas = new Canvas($("#game-field"), cWidth, cHeight);
     var engine = new Engine(canvas);
 });
 
@@ -18,9 +21,10 @@ $(document).ready(function () {
 //manages the canvas, 
 //adds functionality
 class Canvas {
-    
-    constructor(canvas) {
+    constructor(canvas, width, height) {
         this.canvas = canvas;
+        this.w = width;
+        this.h = height;
         this.context = canvas[0].getContext("2d");
     }
     
@@ -49,12 +53,32 @@ class Canvas {
         return new Point(x, y);
     }
     
-    height() {
-        return this.canvas.height();
+    setPixelDensity(wide, high) {
+        var jsElem = document.getElementById(this.canvas.attr('id'));
+        jsElem.height = high;
+        this.h = high;
+        jsElem.width = wide;
+        this.w = wide;
     }
     
-    width() {
-        return this.canvas.width();
+    densityWide() {
+        return this.w/this.canvas.width();
+    }
+    
+    densityHigh() {
+        return this.h/this.canvas.height();
+    }
+    
+    pixelHeight() {
+        return this.h;
+    }
+    
+    pixelWidth() {
+        return this.w;
+    }
+    
+    position() {
+        return this.canvas.position();
     }
     
 }
@@ -71,14 +95,17 @@ class Engine {
     constructor(canvas) {
         //elements array gets passed around by reference
         this.elements = [];
+        //canvas gets passed around, this canvas is a Canvas
+        this.canvas = canvas;
         //new state machine
         this.conductor = new StateMachine();
-        this.conductor.addState(new HomeState(this.elements));
-        this.conductor.addState(new GameState(this.elements));
+        this.conductor.addState(new HomeState(this.elements, this.canvas));
+        this.conductor.addState(new GameState(this.elements, this.canvas));
         this.conductor.changeState("home");
         //listen for events
-        this.canvas = canvas;
-        var listener = new CanvasListener(new ChainOfResponsibility(this.elements), this.canvas.canvas);
+
+        var listener = new CanvasListener(new ChainOfResponsibility(this.elements), this.canvas);
+        var listener = new CanvasListener(new ChainOfResponsibility(this.elements), this.canvas);
         //render
         this.render();
         //update
@@ -108,7 +135,6 @@ class CanvasListener {
         var chain = chain;
         var canvas = canvas;
         $(document).keypress(function(event) {
-            
             var code = event.keyCode || event.which;
             console.log("keypressed ", code);
             var data = new Map();
@@ -117,7 +143,7 @@ class CanvasListener {
             chain.delegateJob(data);
         });
         
-        canvas.click(function(event) {
+        canvas.canvas.click(function(event) {
             console.log("canvas clicked");
             var offset = canvas.position();
             
@@ -125,6 +151,8 @@ class CanvasListener {
             var loc = new Point(event.clientX, event.clientY);
             loc.x = loc.x - offset.left;
             loc.y = loc.y - offset.top;
+            loc.x *= canvas.densityWide();
+            loc.y *= canvas.densityHigh();
             var data = new Map();
             data.set("type", "click");
             data.set("location", loc);
@@ -141,7 +169,7 @@ class ChainOfResponsibility {
     }
     
     delegateJob(data) {
-        this.canPropogate = true;
+        this.canPropagate = true;
         for (let element of this.elements) {
             if (this.canPropagate) {
                 (element.handle(this, data));
@@ -176,10 +204,14 @@ class StateMachine {
     changeState(nextState) {
         console.log("changing to %s \n", nextState);
         if (this.currentState) {
-            this.currentState.leave();
-            this.currentState = null;
+            if (this.currentState.name == nextState) {
+                console.log("already in %s\n", nextState);
+                return;
+            }
+            else {
+                this.currentState.leave();
+            }
         }
-        console.log(this.states);
         
         for (let state of this.states) {
             if (state.name == nextState) {
@@ -192,9 +224,10 @@ class StateMachine {
 }
 
 class State {
-    constructor(name, elements) {
+    constructor(name, elements, canvas) {
         this.name = name;
         this.elements = elements;
+        this.canvas = canvas;
     }
     
     enter() {
@@ -207,44 +240,60 @@ class State {
 }
 
 class HomeState extends State {
-    constructor(elements) {
-        super("home", elements);
+    constructor(elements, canvas) {
+        super("home", elements, canvas);
     }
     
     enter() {
         super.enter();
-        var startSolo = new TextBox("yellow", new Point(200, 250), 200, 100, "start", "game");
-        this.elements.push(...[startSolo]);
+        this.canvas.setPixelDensity(2000, 2000);
+        
+        var h = this.canvas.pixelHeight();
+        var w = this.canvas.pixelWidth();
+        
+        var title = new TextBox("white", new Point(w/6, 0), 2*w/3, h/6, "Nathan's Game Of Life", "home");
+        
+        var startSolo = new TextBox("yellow", new Point(w/6, h/4), w/3, h/6, "Start Game", "game");
+        
+        this.elements.push(...[title, startSolo]);
     }
     
     leave() {
         super.leave();
-        this.elements[0] = null;
+        for (let element of this.elements) {
+            this.elements.pop();
+        }
     }
 }
 
 class GameState extends State {
-    constructor(elements) {
-        super("game", elements);
+    constructor(elements, canvas) {
+        super("game", elements, canvas);
 
     }
     enter() {
         super.enter();
-        var user = new User(new Point(50, 100));
-        var finish = new Finish(new Point(200, 100));
-        this.elements.push(user, finish);
-        for (let i = 0; i < gridHeight*gridWidth; i++) {
-            let mineLoc = new Point(i % gridWidth, Math.floor(i / gridHeight));
+        this.canvas.setPixelDensity(300, 300);
+        var h = this.canvas.pixelHeight();
+        var w = this.canvas.pixelWidth();
+        var user = new User(new Point(w/12, h/2));
+        var finish = new Finish(new Point(7*w/12, h/2));
+        
+        
+        for (let i = 0; i < h*w; i++) {
+            let mineLoc = new Point(i % w, Math.floor(i / h));
             this.elements.push(new Landmine(mineLoc));
         }
-        this.painters[0] = new GamePainter(...this.elements);
+        
+        this.elements.push(user, finish, walls, landmines);
         
     }
     
     leave() {
         super.leave();
-        this.painters.length = 0;
-        this.elements.length = 0;
+        for (let element of this.elements) {
+            this.elements.pop();
+        }
     }
 }
 
@@ -333,9 +382,10 @@ class Box extends ClickToNewStateInHome {
 }
 
 class TextBox extends Box {
-    constructor(colr, topLeft, width, height, text, nextState, font = "30px Arial") {
+    constructor(colr, topLeft, width, height, text, nextState, font = "Arial") {
         super(colr, topLeft, width, height, nextState);
-        this.font = font;
+        this.font = (height/4).toString() + "px " + font;
+        console.log(this.font);
         this.text = text;
     }
     
