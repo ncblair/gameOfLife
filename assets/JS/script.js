@@ -26,6 +26,7 @@ class Canvas {
         this.w = width;
         this.h = height;
         this.context = canvas[0].getContext("2d");
+        this.fitToWindow();
     }
     
     fillPixel(colr, coordinate) {
@@ -79,6 +80,19 @@ class Canvas {
     
     position() {
         return this.canvas.position();
+    }
+
+    
+    fitToWindow() {
+        //make sure canvas fits in screen
+        if ($(window).height() < $(window).width()) {
+            this.canvas.height("100%");
+            this.canvas.width("auto");                    
+        }
+        else {
+            this.canvas.height("auto");
+            this.canvas.width("100%");
+        }
     }
     
 }
@@ -141,6 +155,10 @@ class CanvasListener {
             data.set("type", "keypress");
             data.set("code", code);
             chain.delegateJob(data);
+        });
+        
+        $(window).resize(function( event ) {
+            canvas.fitToWindow();
         });
         
         canvas.canvas.click(function(event) {
@@ -284,7 +302,6 @@ class GameState extends State {
             let mineLoc = new Point(i % w, Math.floor(i / h));
             this.elements.push(new Landmine(mineLoc));
         }
-        
         this.elements.push(user, finish, walls, landmines);
         
     }
