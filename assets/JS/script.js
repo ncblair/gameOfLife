@@ -3,25 +3,17 @@
 /*global $, jQuery, alert*/
 
 //connect to DOM, declare constants;
-var doc = $(document);
-var wndo = $(window);
-var canvas = $("#game-field");
-var fillsize = 3;
-var gridHeight = Math.floor(this.canvas.height / fillsize);
-var gridWidth = Math.floor(this.canvas.width / fillsize);
-var scorefield = $(".score");
-var highscorefield = $(".highscore");
 
-doc.ready(function () {
+$(document).ready(function () {
     "use strict";
-    var engine = new Engine();
+    var canvas = new Canvas($("#game-field"));
+    var engine = new Engine(canvas);
 });
 
 
 
 
 /*Classes*/
-
 
 //manages the canvas, 
 //adds functionality
@@ -32,29 +24,29 @@ class Canvas {
         this.context = canvas[0].getContext("2d");
     }
     
-    //is (X, Y) on the canvas
-    screenPositionOnCanvas(x, y) {
-        var cRect = this.positionOnScreen();
-        return screenPositionOnRect(cRect);
+    fillPixel(colr, coordinate) {
+        this.context.fillStyle = colr;
+        this.context.fillRect(coordinate.x, coordinate.y, 1, 1);
     }
     
-    screenPositionOnRect(x, y, rect) {
-        return (rect.top < y && rect.bottom > y && rect.left < x && rect.right > x);
-    }
-    //gets the position of the mouse at screenX and screenY
-    //relative to the canvas
-    canvasPosition(screenX, screenY) {
-        var cRect = this.positionOnScreen();
-        if screenPositionOnCanvas(screenX, screenY) {
-            return new Point(screenX - cRect.left, screenY - cRect.top);
-        } else {
-            throw "mouse clicked off canvas";
-        }
+    fillBox(colr, topLeft, width, height) {
+        this.context.fillStyle = colr;
+        this.context.fillRect(topLeft.x, topLeft.y, width, height);
     }
     
-    //returns a rectangle object;
-    positionOnScreen() {
-        var rect = this.canvas.getBoundingClientRect();
+    addText(topLeft, width, height, text, font) {
+        this.context.fillStyle = "black";
+        this.context.font = font;
+        this.context.textAlign = "center";
+        this.context.fillText(text, topLeft.x + width / 2, topLeft.y + (height * .6));
+    }
+    
+    //returns the top left coordinate for an item of
+    //width W and height H so that the item is centered
+    center(w, h) {
+        var x = Math.floor((this.width() - w)/2);
+        var y = Math.floor((this.height() - h)/2);
+        return new Point(x, y);
     }
     
     height() {
@@ -69,18 +61,90 @@ class Canvas {
 
 
 
-//Handling User Input with the Canvas
+//Game Engine:
+//initializes ubiquitous elements array, 
+//adds all game states, 
+//begins listening for user input on canvas, 
+//calls each element's paint function, 
+//calls each element's update function
+class Engine {
+    constructor(canvas) {
+        //elements array gets passed around by reference
+        this.elements = [];
+        //new state machine
+        this.conductor = new StateMachine();
+        this.conductor.addState(new HomeState(this.elements));
+        this.conductor.addState(new GameState(this.elements));
+        this.conductor.changeState("home");
+        //listen for events
+        this.canvas = canvas;
+        var listener = new CanvasListener(new ChainOfResponsibility(this.elements), this.canvas.canvas);
+        //render
+        this.render();
+        //update
+        setInterval(this.update.bind(this), 20);
+    }
+    update() {
+        for (let element of this.elements) {
+            var next = element.update(this.elements)
+            if (next) {
+                this.conductor.changeState(next)
+            }
+        }
+    }
+    render() {
+        requestAnimationFrame(this.render.bind(this));
+        for (let element of this.elements) {
+            element.paint(this.canvas);
+        }
+    }
+}
+
+
+
+/*Handling User Input with the Canvas*/
+class CanvasListener {
+    constructor(chain, canvas) {
+        var chain = chain;
+        var canvas = canvas;
+        $(document).keypress(function(event) {
+            
+            var code = event.keyCode || event.which;
+            console.log("keypressed ", code);
+            var data = new Map();
+            data.set("type", "keypress");
+            data.set("code", code);
+            chain.delegateJob(data);
+        });
+        
+        canvas.click(function(event) {
+            console.log("canvas clicked");
+            var offset = canvas.position();
+            
+            //LOC = position on the canvas of click;
+            var loc = new Point(event.clientX, event.clientY);
+            loc.x = loc.x - offset.left;
+            loc.y = loc.y - offset.top;
+            var data = new Map();
+            data.set("type", "click");
+            data.set("location", loc);
+            chain.delegateJob(data);
+        });
+    }
+    
+}
+
 class ChainOfResponsibility {
-    constructor(state, handlers = []) {
-        this.state = state;
-        this.handlers = handlers;
-        this.canPropagate;
+    constructor(elements) {
+        this.elements = elements;
+        this.canPropagate = true;
     }
     
     delegateJob(data) {
-        for (let handler of this.handlers) {
+        this.canPropogate = true;
+        for (let element of this.elements) {
             if (this.canPropagate) {
-                (handler.execute(this, data));
+                (element.handle(this, data));
             }
             else {
                 //handler picked up job
@@ -92,27 +156,8 @@ class ChainOfResponsibility {
     stopPropogation() {
         this.canPropagate = false;
     }
+}
     
-    addHandler(handler) {
-        this.handlers.push(handler);
-    }
-    
-}
-
-// "abstract" class
-class Handler {
-    execute(chain, data) {
-        return;
-    }
-}
-
-class HomeHandler extends Handler{
-    execute(chain, data) {
-        if(chain.)
-    }
-}
-
-
 
 /*States and StateMachine*/
 //Manage different states of my application
@@ -134,27 +179,22 @@ class StateMachine {
             this.currentState.leave();
             this.currentState = null;
         }
+        console.log(this.states);
+        
         for (let state of this.states) {
             if (state.name == nextState) {
                 this.currentState = state;
                 this.currentState.enter();
             }
         }
-    }
-    nextState() {
-        if (this.currentState == null) {
-            throw "Can't call next state on null";
-        }
-        changeState(this.currentState.next);
+        
     }
 }
 
 class State {
-    constructor(name, next, elements, painters) {
+    constructor(name, elements) {
         this.name = name;
-        this.next = next;
         this.elements = elements;
-        this.painters = painters;
     }
     
     enter() {
@@ -166,31 +206,26 @@ class State {
     }
 }
 
-class HomeView extends State {
-    constructor(elements, painters) {
-        super("home", "game", elements, painters);
+class HomeState extends State {
+    constructor(elements) {
+        super("home", elements);
     }
     
     enter() {
         super.enter();
-        var startSolo = new TextBox(new Point(100, 50), "yellow", 300, 50, "Solo");
-        var startBattle = new TextBox(new Point(100, 210), "blue", 300, 50, "Battle");
-        var color = new TextBox(new Point(100, 370), "red", 300, 50, "Color");
-        this.elements.push(...[startSolo, startBattle, color]);
-        this.painters.push(new HomePainter(...this.elements));
-        
+        var startSolo = new TextBox("yellow", new Point(200, 250), 200, 100, "start", "game");
+        this.elements.push(...[startSolo]);
     }
     
     leave() {
         super.leave();
-        this.painters.length = 0;
-        this.elements.length = 0;
+        this.elements[0] = null;
     }
 }
 
-class GameView extends State {
-    constructor(elements, painters) {
-        super("game", "home", elements, painters);
+class GameState extends State {
+    constructor(elements) {
+        super("game", elements);
 
     }
     enter() {
@@ -213,104 +248,149 @@ class GameView extends State {
     }
 }
 
-/*Update and Render*/
 
-//Game Engine
-class Engine {
+
+/*Canvas Elements*/
+
+//The Element is the building block of the game, 
+//Elements can UPDATE(), HANDLE(), and PAINT()
+//A list of Elements will be be managed by the current State
+//The Engine can make calls to update on an Element
+//The Engine's Render Loops makes calls to Element's Paint
+//The Event Listener makes calls to the Chain of Responsibilities, 
+//which gives each Element the chance to claim responsibility and act
+class Element {
+    paint(canvas) {
+        return;
+    }
+    handle(chain, data) {
+        return;
+    }
+    update(elements) {
+        return false;
+    }
+}
+
+//elements on the home menu
+class HomeElem extends Element {
     constructor() {
-        this.elements = [];
-        this.painters = [];
-        this.conductor = new StateMachine();
-        this.conductor.addState(new HomeView(this.elements, this.painters));
-        this.conductor.addState(new GameView(this.elements, this.painters));
-        this.conductor.changeState("home");
-        console.log("after state set");
-        this.render();
-        setInterval(this.update.bind(this), 20);
-    }
-    update() {
-        for (let element of this.elements) {
-            //element.update();
-            console.log("updating elements");
-        }
-    }
-    render() {
-        requestAnimationFrame(this.render.bind(this));
-        if (this.painters[0]) {
-            this.painters[0].paint();
-        }
-        else {
-            throw "No Defined Painter";
-        }
-    }
-
-}
-
-//Abstract Painter, Renders Canvas
-class Painter {
-    
-    //paintables are things that can be painted
-    constructor(...paintables) {
-        this.paintables = paintables;
-        this.canvas = canvas;
-        this.context = canvas[0].getContext("2d");
-        this.fillsize = fillsize;
-    }
-    
-    paint() {
-        throw "Abstract Painter cannot paint"
-    }
-    
-    //returns the top left coordinate for an item of
-    //width W and height H so that the item is centered
-    center(w, h) {
-        var x = Math.floor((this.canvas.width() - w)/2);
-        var y = Math.floor((this.canvas.height() - h)/2);
-        return new Point(x, y);
-    }
-    
-    pixelsHigh() {
-        return Math.floor(this.canvas.height()/fillsize);
-    }
-    
-    pixelsWide() {
-        return Math.floor(this.canvas.width()/fillsize);
+        super();
+        this.isInHome = true;
     }
 }
 
-//only knows how to paint home objects
-class HomePainter extends Painter{
+class ClickToNewStateInHome extends HomeElem {
+    constructor(nextState) {
+        super();
+        this.hasBeenClicked = false;
+        this.nextState = nextState;
+    }
     
-    //this method is really messy, I know...
-    //redesign coming soon, procrastinating
-    //in the name of rapid development
-    paint() {
-        var instr;
-        for (let object of this.paintables) {
-            instr = object.getPaintInstructions();
-            switch (instr[0]) {
-                case "Box":
-                    this.context.fillStyle = instr[1];
-                    this.context.fillRect(instr[2].x, instr[2].y, instr[3], instr[4]);
-                    break;
-                case "TextBox":
-                    console.log(instr);
-                    this.context.fillStyle = instr[1];
-                    var cen = this.center(instr[3], instr[4]);
-                    console.log(cen.x);
-                    this.context.fillRect(cen.x, instr[2].y, instr[3], instr[4]);
-                    this.context.fillStyle = "black";
-                    this.context.font = instr[5];
-                    this.context.textAlign = "center";
-                    this.context.fillText(instr[6], this.canvas.width()/2, instr[2].y + 35);
-                    break;
+    handle(chain, data) {
+        if (data.get("type") == "click") {
+            var loc = data.get("location");
+            if(this.clicked(loc)) {
+                this.hasBeenClicked = true;
+                chain.stopPropogation();
             }
         }
     }
+    
+    update(elements) {
+        if (this.hasBeenClicked) {
+            console.log("Home Element Clicked");
+            this.hasBeenClicked = false;
+            return this.nextState;
+        }
+        return false;
+    }
+    
+    clicked(point) {
+        throw "abstract clicked method cannot be called";
+    }
+} 
+
+class Box extends ClickToNewStateInHome {
+    constructor(colr, topLeft, width, height, nextState) {
+        super(nextState);
+        this.colr = colr;
+        this.topLeft = topLeft;
+        this.width = width;
+        this.height = height;
+    }
+    
+    paint(canvas) {
+        canvas.fillBox(this.colr, this.topLeft, this.width, this.height);
+    }
+    
+    clicked(point) {
+        console.log(this.topLeft.x);
+        console.log(point.x);
+        var inX = this.topLeft.x < point.x && this.topLeft.x + this.width > point.x;
+        var inY = this.topLeft.y < point.y && this.topLeft.y + this.height > point.y;
+        return inX && inY;
+    }
 }
+
+class TextBox extends Box {
+    constructor(colr, topLeft, width, height, text, nextState, font = "30px Arial") {
+        super(colr, topLeft, width, height, nextState);
+        this.font = font;
+        this.text = text;
+    }
+    
+    paint(canvas) {
+        super.paint(canvas);
+        canvas.addText(this.topLeft, this.width, this.height, this.text, this.font);
+    }
+}
+
+//elements in the arena
+/*
+class ArenaElem extends Element {
+    
+}
+
+class Wall extends ArenaElem {
+    
+}
+
+class MineField extends ArenaElem {
+    
+}
+
+class ArenaSquare extends ArenaElem {
+    
+}
+
+class Landmine extends ArenaSquare {
+    
+}
+
+class Player extends ArenaSquare {
+    
+}
+
+class User extends Player {
+    
+}
+
+class Villain extends Player {
+    
+}
+
+class Finish extends ArenaSquare {
+    
+}
+
+class Landmine extends ArenaSquare {
+    
+}
+*/
+
         
 //only knows how to paint game elements
-class GamePainter extends Painter{
+class GamePainter{
     paint() {
         var instr;
         for (let object of this.paintables) {
@@ -503,50 +583,6 @@ class Villain extends Player {
 }
 
 
-    
-/*Home Elements*/
-
-class InHome extends Paintable{
-    constructor(topLeft, colr, bwidth, bheight) {
-        super("Box", colr);
-        this.topLeft = topLeft;
-        this.bwidth = bwidth;
-        this.bheight = bheight;
-        
-        this.paintInstructions = this.getPaintInstructions();
-    }
-    getPaintInstructions() {
-        var instructions = super.getPaintInstructions();
-        instructions[0] = this.paintType;
-        instructions.push(this.topLeft);
-        instructions.push(this.bwidth);
-        instructions.push(this.bheight);
-        return instructions;
-    }
-    
-    update() {
-        return;
-    }
-}
-
-class TextBox extends InHome {
-    constructor(topLeft, colr, bwidth, bheight, text, font = "30px Arial") {
-        super(topLeft, colr, bwidth, bheight);
-        this.paintType = "TextBox";
-        this.font = font;
-        this.text = text;
-        this.paintInstructions = this.getPaintInstructions();
-    }
-    getPaintInstructions() {
-        var instructions = super.getPaintInstructions();
-        instructions[0] = this.paintType;
-        instructions.push(this.font);
-        instructions.push(this.text);
-        return instructions;
-    }
-}
-    
-    
 /*General Helpers*/
 
 class Tuple{
@@ -565,6 +601,8 @@ class Point extends Tuple{
     distanceTo(point) {
         return Math.abs(this.x - x) + Math.abs(this.y - y);
     }
+    
+    
 }
 
 
