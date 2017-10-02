@@ -115,7 +115,7 @@ class Engine {
         this.conductor = new StateMachine();
         this.conductor.addState(new HomeState(this.elements, this.canvas));
         this.conductor.addState(new GameState(this.elements, this.canvas));
-        this.conductor.changeState("home");
+        this.conductor.changeState("game");
         //listen for events
 
         var listener = new CanvasListener(new ChainOfResponsibility(this.elements), this.canvas);
@@ -134,10 +134,12 @@ class Engine {
         }
     }
     render() {
-        requestAnimationFrame(this.render.bind(this));
+        //requestAnimationFrame(this.render.bind(this));
         for (let element of this.elements) {
+            console.log("rendering %o" , element);
             element.paint(this.canvas);
         }
+        console.log("rendered1");
     }
 }
 
@@ -294,14 +296,32 @@ class GameState extends State {
         this.canvas.setPixelDensity(300, 300);
         var h = this.canvas.pixelHeight();
         var w = this.canvas.pixelWidth();
+        
+        //set up user and finish
         var user = new User(new Point(w/12, h/2));
         var finish = new Finish(new Point(7*w/12, h/2));
         
+        //set up the mines
+        var mines = [];
         
         for (let i = 0; i < h*w; i++) {
             let mineLoc = new Point(i % w, Math.floor(i / h));
-            this.elements.push(new Landmine(mineLoc));
+            mines.push(new Landmine(mineLoc));
         }
+        
+        //set up the border walls
+        var leftWall = new Wall(this.canvas.pixelHeight(), new Point(0, 0), 's');
+        var topWall = new Wall(this.canvas.pixelWidth(), new Point(0,0), 'e');
+        var br = new Point(this.canvas.pixelHeight(), this.canvas.pixelWidth());
+        var rightWall = new Wall(this.canvas.pixelHeight(), br, 'n');
+        var bottomWall = new Wall(this.canvas.pixelWidth(), br, 'w');
+        
+        var wallList = [leftWall, topWall, rightWall, bottomWall];
+        
+        var landmines = new LandmineNetwork(mines);
+        var walls = new WallNetwork(wallList);
+        
+
         this.elements.push(user, finish, walls, landmines);
         
     }
@@ -413,97 +433,62 @@ class TextBox extends Box {
 }
 
 //elements in the arena
-/*
-class ArenaElem extends Element {
-    
-}
 
-class Wall extends ArenaElem {
-    
-}
-
-class MineField extends ArenaElem {
-    
-}
-
-class ArenaSquare extends ArenaElem {
-    
-}
-
-class Landmine extends ArenaSquare {
-    
-}
-
-class Player extends ArenaSquare {
-    
-}
-
-class User extends Player {
-    
-}
-
-class Villain extends Player {
-    
-}
-
-class Finish extends ArenaSquare {
-    
-}
-
-class Landmine extends ArenaSquare {
-    
-}
-*/
-
-        
-//only knows how to paint game elements
-class GamePainter{
-    paint() {
-        var instr;
-        for (let object of this.paintables) {
-            instr = object.getPaintInstructions();
-            for (let block of instr[2]) {
-                this.context.fillStyle = instr[1];
-                this.context.fillRect(block.x*fillsize, block.y*fillsize, fillsize, fillsize);
-            }
-        }
-    }
-}
-
-
-//keep track of score, high scores, etc.
-class ScoreKeeper {
-    
-}
-
-    
-class Paintable {
-    constructor(paintType, colr) {
-        this.paintType = paintType;
+class ArenaAbstraction extends Element {
+    constructor(colr) {
+        super();
         this.colr = colr;
-        this.paintInstructions = this.getPaintInstructions();
+        this.occupied = [];
     }
-    getPaintInstructions() {
-        return [this.paintType, this.colr];
-    }
-}
     
-/*Game Elements*/
-//Manage different objects of my application
-
-class InArena extends Paintable{
-    constructor(mysize, colr, startLoc, occupiedFunc) {
-        super("Pixels", colr);
-        this.mysize = mysize;
-        this.startLoc = startLoc;
-        this.occupiedFunc = occupiedFunc;
-        this.occupiedBlocks = this.occupiedBlocks();
-        this.paintInstructions = this.getPaintInstructions();
+    paint(canvas) {
+        for (let block of this.occupied) {
+            canvas.fillPixel(this.colr, block);
+        }
     }
     
     isTouching(that) {
         return distanceTo(that) <= 0;
+    }    
+    
+    //very slow, brute force, but inclusive min-distance function
+    distanceTo(that) {
+        
+        var minDistance = Number.MAX_VALUE;
+        for (let thisBlock of this.occupiedBlocks()) {
+            for (let thatBlock of that.occupiedBlocks()) {
+                if (thisBlock.distanceTo(thatBlock) < minDistance) {
+                    minDistance = thisBlock.distanceTo(thatBlock);
+                }
+            }
+        }
+        return minDistance;
     }
+    
+    
+    occupiedBlocks() {
+        throw "Abstract Class can't occupy blocks";
+    }
+}
+
+class ArenaElem extends Element {
+    constructor(size, colr, startLoc, occupiedFunc) {
+        super();
+        this.size = size;
+        this.colr = colr;
+        this.startLoc = startLoc;
+        this.occupiedFunc = occupiedFunc;
+    }
+    
+    paint(canvas) {
+        for (let block of this.occupied) {
+            canvas.fillPixel(this.colr, block);
+        }
+    }
+    
+    isTouching(that) {
+        return distanceTo(that) <= 0;
+    }    
     
     //very slow, brute force, but inclusive min-distance function
     distanceTo(that) {
@@ -524,89 +509,119 @@ class InArena extends Paintable{
     }
     
     spaceOccupied() {
-        return this.occupiedBlocks.size;
+        return this.occupiedBlocks().size;
     }
-    getPaintInstructions() {
-        var instructions = super.getPaintInstructions();
-        instructions[0] = this.paintType;
-        instructions.push(this.occupiedBlocks);
-        return instructions;
+    
+
+}
+
+class LandmineNetwork extends ArenaAbstraction {
+    constructor(mines) {
+        super(mines[0].colr);
+        this.mines = mines;
+        this.occupied = this.occupiedBlocks();
+    }
+    
+    occupiedBlocks() {
+        var occu = new Set();
+        for (let mine of this.mines) {
+            occu.add(mine.occupiedBlocks());
+        }
+        var occupied = new Set();
+        for (let blockList of occu) {
+            occupied.add(blockList);
+        }
+        return occupied;
+    }
+    
+    //John Conway's Logic Here
+    update(elements) {
+        return;
     }
 }
 
-class ArenaSquare extends InArena {
-    constructor(mysize, colr, location) {
-        function makeSquare(mysize, startLoc) {
+class WallNetwork extends ArenaAbstraction {
+    constructor(walls) {
+        super(walls[0].colr);
+        this.walls = walls;
+    }
+    
+    occupiedBlocks() {
+        var occu = new Set();
+        for (let wall of this.walls) {
+            occu.add(wall.occupiedBlocks());
+        }
+        var occupied = new Set();
+        for (let blockList of occu) {
+            occupied.add(...blockList);
+        }
+        return occupied;
+    }
+}
+
+class Wall extends ArenaElem {
+    //direction is a char n, s, e, w (cardinal direction);
+    //SIZE = 6 implies a 6 unit wall.
+    constructor(size, startLoc, direction = 'n') {
+        //returns a function for occupied spaces of a line in direction = THIS.DIRECTION
+        function lineInTheDirection(direction) {
+            var changeX = 0;
+            var changeY = 0;
+            switch (direction) {
+                case 'n':
+                    changeY =  -1;
+                    break;
+                case 's':
+                    changeY = 1;
+                    break;
+                case 'e':
+                    changeX = 1;
+                    break;
+                //west is default
+                default:
+                    changeX = -1;
+            }
+            //tail recursive optimized function
+            var makeLine = function() {
+                var occupied = new Set();
+                for (let i = 1; i < size; i++) {
+                    occupied.add(new Point(startLoc.x + changeX, startLoc.y + changeY));
+                }
+                return occupied;
+            }
+            return makeLine;
+        }
+        super(size, "purple", startLoc, lineInTheDirection(direction));
+        this.direction = direction;
+    }
+}
+
+class ArenaSquare extends ArenaElem {
+    constructor(size, colr, location) {
+        function makeSquare(size, startLoc) {
             var occupied = new Set();
-            for (let i = mysize; i <= mysize; i++) {
-                for (let j = -mysize; j <= mysize; j ++) {
+            for (let i = -size; i <= size; i++) {
+                for (let j = -size; j <= size; j ++) {
                     occupied.add(new Point(startLoc.x + i, startLoc.y + j));
                 }
             }
             return occupied;
         }
-        
-        super(mysize, colr, location, makeSquare);   
+        super(size, colr, location, makeSquare);   
     }
     
     distanceTo(that) {
         return this.location.distanceTo(that.location) - this.mysize;
     }
-    
-}
-
-class Wall extends InArena {
-    //direction is a char n, s, e, w (cardinal direction);
-    //mysize is 0 indexed, mysize = 5 implies a 6 unit wall.
-    constructor(mysize, startLoc, direction = 'n') {
-        this.direction = direction;
-        super(mysize, "white", startLoc, this.lineInTheDirection());
-    }
-    
-    //returns a function for occupied spaces of a line in direction = THIS.DIRECTION
-    lineInTheDirection() {
-        var changeX = 0;
-        var changeY = 0;
-        switch (this.direction) {
-            case 'n':
-                changeY =  -1;
-                break;
-            case 's':
-                changeY = 1;
-                break;
-            case 'e':
-                changeX = 1;
-                break;
-            //west is default
-            default:
-                changeX = -1;
-                
-        }
-        //tail recursive optimized function
-        var makeLine = function(mysize, startLoc) {
-            var occupied = new Set();
-            
-            var makeLineTailRecursive = function(mysize, startLoc, occupied) {
-                "use strict";
-                if (mysize < 0) {
-                    return occupied;
-                }
-                occupied.add(new Point(startLoc.x + mysize*changeX, startLoc.y + mysize*changeY));
-                return makeLineTailRecursive(mysize - 1, startLoc, occupied);
-            }
-            
-            return makeLineTailRecursive(mysize, startLoc, occupied);
-        }
-        
-        return makeLine;
-    }
 }
 
 class Landmine extends ArenaSquare {
-    //landmine's has property is on, s.t. if a landmine is on and a Player is on the same square, the player will lose health; else, not;
-    constructor(location, mysize = 0) {
+    //landmine's has property is on, s.t. if a landmine 
+    //is on and a Player is on the same square, the player will lose health
+    constructor(location, size = 0) {
+        super(size, "red", location);
         this.isOn = false;
-        super(mysize, "red", location);
+        
     }
     
     activate() {
@@ -615,12 +630,6 @@ class Landmine extends ArenaSquare {
     
     deactivate() {
         this.isOn = false;
-    }
-}
-
-class Finish extends ArenaSquare {
-    constructor(location, mysize = 2) {
-        super(mysize, "green", location);
     }
 }
 
@@ -634,18 +643,51 @@ class Player extends ArenaSquare {
         location.x += velocity.x;
         location.y += velocity.y;
     }
+    
+
 }
 
 class User extends Player {
     constructor(location, mysize = 1) {
         super(mysize, "blue", location);
     }
-    
+    handle(chain, data) {
+        if (data.get("type") == "keypress") {
+            var code = data.get("code");
+            if (code == 87) {
+                //w
+                move(new Point(0, -1));
+            } else if (code == 65) {
+                //a
+                move(new Point(-1, 0));
+            } else if (code == 83) {
+                //s
+                move(new Point(0, 1));
+            } else if (code == 68) {
+                //d
+                move(new Point(1, 0));
+            }
+        }
+    }
 }
 
 class Villain extends Player {
     constructor(location, mysize = 1) {
         super(mysize, "gray", location);
+    }
+    update(elements) {
+        console.log("IMPLEMENT, THIS IS WHERE THE AI GOES");
+    }
+}
+
+class Finish extends ArenaSquare {
+    constructor(location, mysize = 2) {
+        super(mysize, "green", location);
+    }
+    
+    //move to a random spot
+    move() {
+        console.log("IMPLEMENT");
     }
 }
 
