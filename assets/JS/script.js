@@ -97,6 +97,9 @@ class Canvas {
         }
     }
     
+    clear() {
+        this.context.clearRect(0, 0, this.h, this.w);
+    }
 }
 
 
@@ -136,7 +139,8 @@ class Engine {
         }
     }
     render() {
-        //requestAnimationFrame(this.render.bind(this));
+        requestAnimationFrame(this.render.bind(this));
+        this.canvas.clear();
         for (let element of this.elements) {
             element.paint(this.canvas);
         }
@@ -150,19 +154,33 @@ class CanvasListener {
     constructor(chain, canvas) {
         var chain = chain;
         var canvas = canvas;
-        $(document).keypress(function(event) {
-            var code = event.keyCode || event.which;
-            console.log("keypressed ", code);
+        
+        
+        //gotta do this little thing to prevent keydown repeat delay
+        //broadcasts which keys are pressed
+        var keyState = {};
+        $(window).keydown(function(event) {
+            keyState[event.keyCode || event.which] = true;
+        })
+        $(window).keyup(function(event) {
+            keyState[event.keyCode || event.which] = false;
+        })
+        function broadcastKeyState() {
+            console.log(keyState);
             var data = new Map();
             data.set("type", "keypress");
-            data.set("code", code);
+            data.set("code", keyState);
             chain.delegateJob(data);
-        });
+            setTimeout(broadcastKeyState, 50);
+        }
+        broadcastKeyState();
         
+        //make sure canvas always fits in window;
         $(window).resize(function( event ) {
             canvas.fitToWindow();
         });
         
+        //broadcasts when user clicks the screen
         canvas.canvas.click(function(event) {
             console.log("canvas clicked");
             var offset = canvas.position();
@@ -629,8 +647,8 @@ class Player extends ArenaSquare {
         this.health = 1;
     }
     move(velocity) {
-        location.x += velocity.x;
-        location.y += velocity.y;
+        this.location.x += velocity.x;
+        this.location.y += velocity.y;
     }
     
 
@@ -643,18 +661,18 @@ class User extends Player {
     handle(chain, data) {
         if (data.get("type") == "keypress") {
             var code = data.get("code");
-            if (code == 87) {
-                //w
-                move(new Point(0, -1));
-            } else if (code == 65) {
-                //a
-                move(new Point(-1, 0));
-            } else if (code == 83) {
-                //s
-                move(new Point(0, 1));
-            } else if (code == 68) {
-                //d
-                move(new Point(1, 0));
+            if (code[87] || code[38]) {
+                //w or up
+                this.move(new Point(0, -1));
+            } else if (code[65] || code[37]) {
+                //a or left
+                this.move(new Point(-1, 0));
+            } else if (code[83] || code[40]) {
+                //s or down
+                this.move(new Point(0, 1));
+            } else if (code[68] || code[39]) {
+                //d or right
+                this.move(new Point(1, 0));
             }
         }
     }
