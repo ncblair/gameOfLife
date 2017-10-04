@@ -312,7 +312,7 @@ class GameState extends State {
     }
     enter() {
         super.enter();
-        this.canvas.setPixelDensity(150, 150);
+        this.canvas.setPixelDensity(40, 40);
         var h = this.canvas.pixelHeight();
         var w = this.canvas.pixelWidth();
         
@@ -334,19 +334,25 @@ class GameState extends State {
         
         
         //set up the mines, not touching other blocks
-        var mines = [];
-        
-        for (let i = 0; i < h*w; i++) {
-            let mineLoc = new Point(i % w, Math.floor(i / h));
-            let newMine = new Landmine(mineLoc);
-            
-            //only activate some mines that aren't near important elements to start
-            if (Math.random() > .7 && newMine.distanceTo(user) > 10 && newMine.distanceTo(finish) > 10 && !newMine.isTouching(walls)) {
-                newMine.activate();
+        var mines = new Array(h);
+        for (let i = 0; i < h; i ++) {
+            mines[i] = new Array(w);
+        }
+        for (let i = 0; i < h; i++) {
+            for (let j = 0; j < w; j++) {
+                let mineLoc = new Point(i, j);
+                let newMine = new Landmine(mineLoc);
+
+                //only activate some mines that aren't near important elements to start
+                if (Math.random() > .9 && newMine.distanceTo(user) > 10 && newMine.distanceTo(finish) > 10 && !newMine.isTouching(walls)) {
+                    newMine.activate();
+                                    
+                }
+                mines[i][j] = newMine;
             }
-            mines.push(newMine);
         }
         
+        //mines is a 2d array;
         var landmines = new LandmineNetwork(mines);
 
         //add all the elements to the elements
@@ -520,27 +526,124 @@ class ArenaElem extends ArenaAbstraction {
 }
 
 class LandmineNetwork extends ArenaAbstraction {
+    //mines is a 2d array of landmines
     constructor(mines) {
-        super(mines[0].colr);
+        super(mines[0][0].colr);
         this.mines = mines;
+        this.toUpdate = new Set();
+        this.possibleUpdateNext = new Set();
+        for (let row of this.mines) {
+            for (let mine of row) {
+                this.possibleUpdateNext.add(mine);
+            }
+        }
+        this.calculateMineNeighbors();
+
+        
     }
     
     occupiedBlocks() {
         //iterates through this.walls and adds each of the walls occupied blocks
         var occupied = new Set();
-        for (let mine of this.mines) {
-            if (mine.isOn) {
-                for (let block of mine.occupiedBlocks()) {
-                    occupied.add(block);
+        for (let row of this.mines) {
+            for (let mine of row) {
+                if (mine.isOn) {
+                    for (let block of mine.occupiedBlocks()) {
+                        occupied.add(block);
+                    }
                 }
             }
+
         }
         return occupied;
     }
     
+    //this unintelligible (but efficient) function returns 
+    //all the mines ajacent to a mine;
+    adjacentMines(mine) {
+        var adjacent = new Set();
+        for (let i = 0; i < 2*(mine.size + 1); i++) {
+            //if statements help avoid null pointers
+            if (this.mines[mine.location.x + (mine.size + 1)]) {
+                adjacent.add(this.mines[mine.location.x + (mine.size + 1)][mine.location.y - (mine.size + 1) + i]);
+            }
+            
+            if (this.mines[mine.location.x - (mine.size + 1)]) {
+                adjacent.add(this.mines[mine.location.x - (mine.size + 1)][mine.location.y - (mine.size + 1) + i]);
+            }
+            if (this.mines[mine.location.x - (mine.size + 1) + i]) {
+               adjacent.add(this.mines[mine.location.x - (mine.size + 1) + i][mine.location.y + (mine.size + 1)]); 
+            }
+            
+            if (this.mines[mine.location.x - (mine.size + 1) + i]) {
+                adjacent.add(this.mines[mine.location.x - (mine.size + 1) + i][mine.location.y - (mine.size + 1) + i]);
+            }
+            
+        }
+        for (let mine of adjacent) {
+            if (!mine) {
+                adjacent.delete(mine);
+            }
+        }
+        return adjacent;
+    }
+    
+    //calculates the number of neighbors for each mine
+    //adds those neighbors to list of neighbors for each mine;
+    calculateMineNeighbors() {
+        for (let i = 0; i < this.mines.length; i++) {
+            for (let j = 0; j < this.mines[0].length; j++) {
+                var mine = this.mines[i][j];
+                mine.neighbors.clear();
+                let adjacents = this.adjacentMines(mine);
+                for (let otherMine of adjacents) {
+                    mine.addNeighbor(otherMine);
+                }
+            }   
+        }
+    }
+    
     //John Conway's Logic Here
     update(elements) {
-        return;
+        for (let mine of this.toUpdate) {
+            if (mine.activateNext) {
+                mine.activate();
+                mine.activateNext = false;
+            }
+            else if (mine.deactivateNext) {
+                mine.deactivate(); 
+                mine.deactivateNext = false;
+            }
+            this.toUpdate.delete(mine);
+            for (let neighbor of mine.neighbors) {
+                this.possibleUpdateNext.add(neighbor);
+            }
+            this.possibleUpdateNext.add(mine);
+        }
+        for (let mine of this.possibleUpdateNext) {
+            console.log(mine);
+            console.log(mine.neighbors);
+            console.log(mine.numActivatedNeighbors);
+            switch(mine.numActivatedNeighbors) {
+                case 2:
+                    break;
+                case 3:
+                    if (!mine.isOn) {
+                        mine.activateNextTurn();
+                        this.toUpdate.add(mine);                   
+                    }
+                    break;
+                default:
+                    if (mine.isOn) {
+                        mine.deactivateNextTurn();
+                        this.toUpdate.add(mine);
+                    }
+                    break;
+            }
+        }
+        console.log("possible %o", this.possibleUpdateNext);
+        console.log("toUpdate %o", this.toUpdate);
+        //this.possibleUpdateNext.clear();
     }
 }
 
@@ -628,15 +731,48 @@ class Landmine extends ArenaSquare {
     constructor(location, size = 0) {
         super(size, "red", location);
         this.isOn = false;
+        this.activateNext = false;
+        this.deactivateNext = false;
         
+        //adjacent mines
+        var set = new Set();
+        this.neighbors = set;
+        
+        //small efficieny booster so I don't have to recalculate
+        this.numActivatedNeighbors = 0;
     }
     
     activate() {
-        this.isOn = true;
+        if (!this.isOn) {
+            this.isOn = true;
+            for (let neighbor of this.neighbors) {
+                neighbor.numActivatedNeighbors += 1;
+            }
+        }
     }
     
     deactivate() {
-        this.isOn = false;
+        if (this.isOn) {
+            this.isOn = false;
+            for (let neighbor of this.neighbors) {
+                neighbor.numActivatedNeighbors -=1;
+            }
+        }
+    }
+    
+    activateNextTurn() {
+        this.activateNext = true;
+    }
+    
+    deactivateNextTurn() {
+        this.deactivateNext = true;
+    }
+    
+    addNeighbor(otherMine) {
+        this.neighbors.add(otherMine);
+        if (otherMine.isOn) {
+            this.numActivatedNeighbors += 1;
+        }
     }
 }
 
@@ -664,13 +800,13 @@ class User extends Player {
             if (code[87] || code[38]) {
                 //w or up
                 this.move(new Point(0, -1));
-            } else if (code[65] || code[37]) {
+            } if (code[65] || code[37]) {
                 //a or left
                 this.move(new Point(-1, 0));
-            } else if (code[83] || code[40]) {
+            } if (code[83] || code[40]) {
                 //s or down
                 this.move(new Point(0, 1));
-            } else if (code[68] || code[39]) {
+            } if (code[68] || code[39]) {
                 //d or right
                 this.move(new Point(1, 0));
             }
