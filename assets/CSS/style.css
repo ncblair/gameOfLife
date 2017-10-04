@@ -12,6 +12,7 @@ body{
     display:inline-block;
     vertical-align:middle;
     background-color:white;
+    image-rendering:pixelated;
 }
 
 .canvas-container:before {    /* create a full-height inline block pseudo=element */

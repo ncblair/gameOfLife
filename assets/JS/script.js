@@ -23,9 +23,11 @@ $(document).ready(function () {
 class Canvas {
     constructor(canvas, width, height) {
         this.canvas = canvas;
+        
         this.w = width;
         this.h = height;
         this.context = canvas[0].getContext("2d");
+        this.context.imageSmoothingEnabled = true;
         this.fitToWindow();
     }
     
@@ -136,10 +138,8 @@ class Engine {
     render() {
         //requestAnimationFrame(this.render.bind(this));
         for (let element of this.elements) {
-            console.log("rendering %o" , element);
             element.paint(this.canvas);
         }
-        console.log("rendered1");
     }
 }
 
@@ -173,6 +173,7 @@ class CanvasListener {
             loc.y = loc.y - offset.top;
             loc.x *= canvas.densityWide();
             loc.y *= canvas.densityHigh();
+            console.log(loc);
             var data = new Map();
             data.set("type", "click");
             data.set("location", loc);
@@ -293,26 +294,31 @@ class GameState extends State {
     }
     enter() {
         super.enter();
-        this.canvas.setPixelDensity(300, 300);
+        this.canvas.setPixelDensity(30, 30);
         var h = this.canvas.pixelHeight();
         var w = this.canvas.pixelWidth();
         
         //set up user and finish
-        var user = new User(new Point(w/12, h/2));
-        var finish = new Finish(new Point(7*w/12, h/2));
+        var user = new User(new Point(Math.floor(w/12), Math.floor(h/2)));
+        var finish = new Finish(new Point(Math.floor(7*w/12), Math.floor(h/2)));
         
         //set up the mines
         var mines = [];
         
         for (let i = 0; i < h*w; i++) {
             let mineLoc = new Point(i % w, Math.floor(i / h));
-            mines.push(new Landmine(mineLoc));
+            let newMine = new Landmine(mineLoc);
+            
+            if (Math.random() > .9) {
+                newMine.activate();
+            }
+            mines.push(newMine);
         }
         
         //set up the border walls
         var leftWall = new Wall(this.canvas.pixelHeight(), new Point(0, 0), 's');
         var topWall = new Wall(this.canvas.pixelWidth(), new Point(0,0), 'e');
-        var br = new Point(this.canvas.pixelHeight(), this.canvas.pixelWidth());
+        var br = new Point(this.canvas.pixelHeight() - 1, this.canvas.pixelWidth() - 1);
         var rightWall = new Wall(this.canvas.pixelHeight(), br, 'n');
         var bottomWall = new Wall(this.canvas.pixelWidth(), br, 'w');
         
@@ -438,11 +444,10 @@ class ArenaAbstraction extends Element {
     constructor(colr) {
         super();
         this.colr = colr;
-        this.occupied = [];
     }
     
     paint(canvas) {
-        for (let block of this.occupied) {
+        for (let block of this.occupiedBlocks()) {
             canvas.fillPixel(this.colr, block);
         }
     }
@@ -471,41 +476,17 @@ class ArenaAbstraction extends Element {
     }
 }
 
-class ArenaElem extends Element {
-    constructor(size, colr, startLoc, occupiedFunc) {
-        super();
+class ArenaElem extends ArenaAbstraction {
+    constructor(size, colr, location, occupiedFunc) {
+        super(colr);
         this.size = size;
-        this.colr = colr;
-        this.startLoc = startLoc;
+        this.location = location;
         this.occupiedFunc = occupiedFunc;
     }
     
-    paint(canvas) {
-        for (let block of this.occupied) {
-            canvas.fillPixel(this.colr, block);
-        }
-    }
-    
-    isTouching(that) {
-        return distanceTo(that) <= 0;
-    }    
-    
-    //very slow, brute force, but inclusive min-distance function
-    distanceTo(that) {
-        
-        var minDistance = Number.MAX_VALUE;
-        for (let thisBlock of this.occupiedBlocks()) {
-            for (let thatBlock of that.occupiedBlocks()) {
-                if (thisBlock.distanceTo(thatBlock) < minDistance) {
-                    minDistance = thisBlock.distanceTo(thatBlock);
-                }
-            }
-        }
-        return minDistance;
-    }
     
     occupiedBlocks() {
-        return this.occupiedFunc(this.mysize, this.startLoc);
+        return this.occupiedFunc(this.size, this.location);
     }
     
     spaceOccupied() {
@@ -519,17 +500,17 @@ class LandmineNetwork extends ArenaAbstraction {
     constructor(mines) {
         super(mines[0].colr);
         this.mines = mines;
-        this.occupied = this.occupiedBlocks();
     }
     
     occupiedBlocks() {
-        var occu = new Set();
-        for (let mine of this.mines) {
-            occu.add(mine.occupiedBlocks());
-        }
+        //iterates through this.walls and adds each of the walls occupied blocks
         var occupied = new Set();
-        for (let blockList of occu) {
-            occupied.add(blockList);
+        for (let mine of this.mines) {
+            if (mine.isOn) {
+                for (let block of mine.occupiedBlocks()) {
+                    occupied.add(block);
+                }
+            }
         }
         return occupied;
     }
@@ -547,15 +528,15 @@ class WallNetwork extends ArenaAbstraction {
     }
     
     occupiedBlocks() {
-        var occu = new Set();
-        for (let wall of this.walls) {
-            occu.add(wall.occupiedBlocks());
-        }
+        //iterates through this.walls and adds each of the walls occupied blocks
         var occupied = new Set();
-        for (let blockList of occu) {
-            occupied.add(...blockList);
+        for (let wall of this.walls) {
+            for (let block of wall.occupiedBlocks()) {
+                occupied.add(block);
+            }
         }
         return occupied;
+                    
     }
 }
 
@@ -584,8 +565,8 @@ class Wall extends ArenaElem {
             //tail recursive optimized function
             var makeLine = function() {
                 var occupied = new Set();
-                for (let i = 1; i < size; i++) {
-                    occupied.add(new Point(startLoc.x + changeX, startLoc.y + changeY));
+                for (let i = 0; i < size; i++) {
+                    occupied.add(new Point(startLoc.x + i*changeX, startLoc.y + i*changeY));
                 }
                 return occupied;
             }
@@ -601,7 +582,7 @@ class ArenaSquare extends ArenaElem {
         function makeSquare(size, startLoc) {
             var occupied = new Set();
             for (let i = -size; i <= size; i++) {
-                for (let j = -size; j <= size; j ++) {
+                for (let j = -size; j <= size; j++) {
                     occupied.add(new Point(startLoc.x + i, startLoc.y + j));
                 }
             }
@@ -611,7 +592,7 @@ class ArenaSquare extends ArenaElem {
     }
     
     distanceTo(that) {
-        return this.location.distanceTo(that.location) - this.mysize;
+        return this.location.distanceTo(that.location) - this.size;
     }
 }
 
@@ -635,8 +616,8 @@ class Landmine extends ArenaSquare {
 
 class Player extends ArenaSquare {
     //velocity is a vector(TUPLE) representing change in location
-    constructor(colr, location, mysize = 1) {
-        super(mysize, colr, location);
+    constructor(colr, location, size = 1) {
+        super(size, colr, location);
         this.health = 1;
     }
     move(velocity) {
@@ -648,8 +629,8 @@ class Player extends ArenaSquare {
 }
 
 class User extends Player {
-    constructor(location, mysize = 1) {
-        super(mysize, "blue", location);
+    constructor(location, size = 1) {
+        super("blue", location);
     }
     handle(chain, data) {
         if (data.get("type") == "keypress") {
@@ -672,8 +653,8 @@ class User extends Player {
 }
 
 class Villain extends Player {
-    constructor(location, mysize = 1) {
-        super(mysize, "gray", location);
+    constructor(location, size = 1) {
+        super(size, "gray", location);
     }
     update(elements) {
         console.log("IMPLEMENT, THIS IS WHERE THE AI GOES");
@@ -681,8 +662,8 @@ class Villain extends Player {
 }
 
 class Finish extends ArenaSquare {
-    constructor(location, mysize = 2) {
-        super(mysize, "green", location);
+    constructor(location, size = 1) {
+        super(size, "green", location);
     }
     
     //move to a random spot
