@@ -128,7 +128,7 @@ class Engine {
         //render
         this.render();
         //update
-        setInterval(this.update.bind(this), 20);
+        setInterval(this.update.bind(this), 100);
     }
     update() {
         for (let element of this.elements) {
@@ -166,7 +166,6 @@ class CanvasListener {
             keyState[event.keyCode || event.which] = false;
         })
         function broadcastKeyState() {
-            console.log(keyState);
             var data = new Map();
             data.set("type", "keypress");
             data.set("code", keyState);
@@ -312,7 +311,7 @@ class GameState extends State {
     }
     enter() {
         super.enter();
-        this.canvas.setPixelDensity(20, 20);
+        this.canvas.setPixelDensity(400, 400);
         var h = this.canvas.pixelHeight();
         var w = this.canvas.pixelWidth();
         
@@ -646,9 +645,6 @@ class LandmineNetwork extends ArenaAbstraction {
             this.possibleUpdateNext.add(mine);
         }
         for (let mine of this.possibleUpdateNext) {
-            //console.log(mine);
-            //console.log(mine.neighbors);
-            console.log(mine.numActivatedNeighbors);
             switch(mine.numActivatedNeighbors) {
                 case 2:
                     break;
@@ -666,7 +662,7 @@ class LandmineNetwork extends ArenaAbstraction {
                     break;
             }
         }
-        //this.possibleUpdateNext.clear();
+        this.possibleUpdateNext.clear();
     }
 }
 
