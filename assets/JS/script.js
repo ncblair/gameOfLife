@@ -1,442 +1,911 @@
-//some of this code is inspired by http://disruptive-communications.com/conwaylifejavascript/
+/*author: Nathan Blair, nathanblair.me*/
+/*jslint browser: true*/
+/*global $, jQuery, alert*/
 
 
-$(document).ready(function(){
-	//check connection to javascript
-    console.log("connected");
+$(document).ready(function () {
+    "use strict";
+    var c = document.getElementById('game-field');
+    var cWidth = c.width;
+    var cHeight = c.height;
     
-    
-    //declare variables
-    var $c = $("#game-field");
-	var $ctx = $c[0].getContext("2d");
-    var fillsize = 3;//amount of pixels per block on canvas
-	var gridHeight = Math.round($c.height()/fillsize);//amount of cells in the grid (height)
-	var gridWidth = Math.round($c.width()/fillsize);//amount of cells in the grid (width)
-    var $cHeight = $c.height();
-    var $cWidth = $c.width();
-    var Xpos;
-    var Ypos;//position on GRID
-    var Xstart = 45;
-    var Ystart = 75;
-    var moving;
-    var $user = $(".user");
-    var username = setHighScoreName();
-    var score;
-    var $score = $(".score");
-    var highscore = setHighScore();
-    var $highscore = $(".highscore");
-    var xFinishMinStart = Math.round(gridWidth/2) - 5;
-    var xFinishMaxStart = Math.round(gridWidth/2) + 5;
-    var yFinishMinStart = Math.round(gridHeight/2) - 5;
-    var yFinishMaxStart = Math.round(gridHeight/2) + 5;
-    var xFinishMin;
-    var xFinishMax;
-    var yFinishMin;
-    var yFinishMax;//position on GRID
-    
-	var theGrid = createArray(gridWidth);
-	var mirrorGrid = createArray(gridWidth);
-	$ctx.fillStyle = "red";
-	var count = 0;
-	var $starting_message = $(".starting-message");
-    var $death_message = $(".death-message");
-    
-    
-    
-    //prepare new game
-    startOver();
-    
-    
-    //on spacebar, start main loop
-    $('body').keyup(function(e){
-        if (!moving){
-            if(e.keyCode == 32){
-                // user has pressed space
-                $starting_message.css("opacity","0");
-                $death_message.css("opacity", "0");
-                moving = true;
-                tick(); //call main loop
-            }
-        }
+    var canvas = new Canvas($("#game-field"), cWidth, cHeight);
+    var engine = new Engine(canvas);
+});
+
+
+
+
+/*Classes*/
+
+//manages the canvas, 
+//adds functionality
+class Canvas {
+    constructor(canvas, width, height) {
+        this.canvas = canvas;
         
-    });
+        this.w = width;
+        this.h = height;
+        this.context = canvas[0].getContext("2d");
+        this.context.imageSmoothingEnabled = true;
+        this.fitToWindow();
+    }
     
+    fillPixel(colr, coordinate) {
+        this.context.fillStyle = colr;
+        this.context.fillRect(coordinate.x, coordinate.y, 1, 1);
+    }
     
-    //override keydown repeat delay
-    //taken from stackoverflow https://stackoverflow.com/questions/11355595/is-it-possible-to-override-the-keydown-repeat-delay-in-javascript
-    function DeltaTimer(render, interval) {
-        var timeout;
-        var lastTime;
+    fillBox(colr, topLeft, width, height) {
+        this.context.fillStyle = colr;
+        this.context.fillRect(topLeft.x, topLeft.y, width, height);
+    }
+    
+    addText(topLeft, width, height, text, font) {
+        this.context.fillStyle = "black";
+        this.context.font = font;
+        this.context.textAlign = "center";
+        this.context.fillText(text, topLeft.x + width / 2, topLeft.y + (height * .6));
+    }
+    
+    //returns the top left coordinate for an item of
+    //width W and height H so that the item is centered
+    center(w, h) {
+        var x = Math.floor((this.width() - w)/2);
+        var y = Math.floor((this.height() - h)/2);
+        return new Point(x, y);
+    }
+    
+    setPixelDensity(wide, high) {
+        var jsElem = document.getElementById(this.canvas.attr('id'));
+        jsElem.height = high;
+        this.h = high;
+        jsElem.width = wide;
+        this.w = wide;
+    }
+    
+    densityWide() {
+        return this.w/this.canvas.width();
+    }
+    
+    densityHigh() {
+        return this.h/this.canvas.height();
+    }
+    
+    pixelHeight() {
+        return this.h;
+    }
+    
+    pixelWidth() {
+        return this.w;
+    }
+    
+    position() {
+        return this.canvas.position();
+    }
 
-        this.start = start;
-        this.stop = stop;
-
-        function start() {
-            timeout = setTimeout(loop, 0);
-            lastTime = Date.now();
-            return lastTime;
+    
+    fitToWindow() {
+        //make sure canvas fits in screen
+        if ($(window).height() < $(window).width()) {
+            this.canvas.height("100%");
+            this.canvas.width("auto");                    
         }
-
-        function stop() {
-            clearTimeout(timeout);
-            return lastTime;
-        }
-
-        function loop() {
-            var thisTime = Date.now();
-            var deltaTime = thisTime - lastTime;
-            var delay = Math.max(interval - deltaTime, 0);
-            timeout = setTimeout(loop, delay);
-            lastTime = thisTime + delay;
-            render(thisTime);
+        else {
+            this.canvas.height("auto");
+            this.canvas.width("100%");
         }
     }
     
-    (function (interval) {
-        var keyboard = {};
+    clear() {
+        this.context.clearRect(0, 0, this.h, this.w);
+    }
+}
 
-        window.addEventListener("keyup", keyup, false);
-        window.addEventListener("keydown", keydown, false);
 
-        function keyup(event) {
-            keyboard[event.keyCode].pressed = false;
-        }
 
-        function keydown(event) {
-            var keyCode = event.keyCode;
-            var key = keyboard[keyCode];
+//Game Engine:
+//initializes ubiquitous elements array, 
+//adds all game states, 
+//begins listening for user input on canvas, 
+//calls each element's paint function, 
+//calls each element's update function
+class Engine {
+    constructor(canvas) {
+        //elements array gets passed around by reference
+        this.elements = [];
+        //canvas gets passed around, this canvas is a Canvas
+        this.canvas = canvas;
+        //new state machine
+        this.conductor = new StateMachine();
+        this.conductor.addState(new HomeState(this.elements, this.canvas));
+        this.conductor.addState(new GameState(this.elements, this.canvas));
+        this.conductor.changeState("home");
+        //listen for events
 
-            if (key) {
-                if (!key.start)
-                    key.start = key.timer.start();
-                key.pressed = true;
-            } else {
-                var timer = new DeltaTimer(function (time) {
-                    if (key.pressed) {
-                        var event = document.createEvent("Event");
-                        event.initEvent("keypressed", true, true);
-                        event.time = time - key.start;
-                        event.keyCode = keyCode;
-                        window.dispatchEvent(event);
-                    } else {
-                        key.start = 0;
-                        timer.stop();
-                    }
-                }, interval);
-
-                key = keyboard[keyCode] = {
-                    pressed: true,
-                    timer: timer
-                };
-
-                key.start = timer.start();
+        var listener = new CanvasListener(new ChainOfResponsibility(this.elements), this.canvas);
+        var listener = new CanvasListener(new ChainOfResponsibility(this.elements), this.canvas);
+        //render
+        this.render();
+        //update
+        setInterval(this.update.bind(this), 35);
+    }
+    update() {
+        for (let element of this.elements) {
+            var next = element.update(this.elements)
+            if (next) {
+                this.conductor.changeState(next)
+                break;
             }
         }
-    })(30);
-    //end taken from stackoverflow
-    
-    
-    //arrow keys control movement
-    window.addEventListener("keypressed", function (event) {
-        if(moving){
-            switch (event.keyCode) {
-                case 37:
-                    Xpos -=1;
-                    break;
-                case 38:
-                    Ypos -= 1;
-                    break;
-                case 39:
-                    Xpos += 1;
-                    break;
-                case 40:
-                    Ypos += 1;
-                    break;
-            }
+    }
+    render() {
+        requestAnimationFrame(this.render.bind(this));
+        this.canvas.clear();
+        for (let element of this.elements) {
+            element.paint(this.canvas);
         }
-    
-    }, false);
-    
-	//******************************
-	//functions
-    //*********
-    
-	function tick() { //main loop
-		setTimeout(function(){
-            console.time("loop");
-            $score.text(score);
-	        drawGrid();
-            drawPlayer();
-            drawFinish();
-            if (playerDies()){
-                $death_message.css("opacity", "1");
-                setHighScore();
-                setHighScoreName();
-                moving = false;
-                updateHighScore();
-                startOver();
+    }
+}
 
-                
-                
-            }
-            //increase the players score, move finish, continue loop
-            if (playerWins()){
-                score += 1;
-                moveFinish();
-                updateGrid();
-                console.timeEnd("loop");
-                requestAnimationFrame(tick);
-                count +=1;
-            }
-            else{
-                if (moving){
-                    updateGrid();
-                    console.timeEnd("loop");
-                    requestAnimationFrame(tick);
-                    count +=1;
-                }
-            }
-		}, 20);
-	}
-    
-    //when the player reaches the finish, move it
-    function moveFinish(){
-        xFinishMin = Math.round(Math.random()*(gridHeight - 30) + 10);
-        yFinishMin = Math.round(Math.random()*(gridWidth - 30) + 10);
-        yFinishMax = yFinishMin + 10;
-        xFinishMax = xFinishMin + 10;
-        console.log("xfinish" + xFinishMin);
-        console.log("yfinish" + yFinishMin);
+
+
+/*Handling User Input with the Canvas*/
+class CanvasListener {
+    constructor(chain, canvas) {
+        var chain = chain;
+        var canvas = canvas;
         
-    }
-    
-    //partially taken from https://stackoverflow.com/questions/28177117/how-to-update-mysql-with-php-and-ajax-without-refreshing-the-page
-    function updateHighScore(){
-        console.log("updatingHighScore");
-        console.log("score is " + score);
-        console.log("highscore is " + highscore);
-        if (score > highscore){
-            username = prompt("Congratulations! You beat the High Score. What is your name?");
-            $.ajax({
-                type:'POST',//type of ajax
-                url:'/gameOfLife/assets/PHP/highScore.php',//where the request is going
-                data:{"name": username, "score": score},//the variable you want to send
-                success:function(result){
-                    //result is your result from the xhttpRequest.
-                    console.log("result" + result);
-                    highscore = result;
-                    $highscore.text(highscore);
-                }
-            })
+        
+        //gotta do this little thing to prevent keydown repeat delay
+        //broadcasts which keys are pressed
+        var keyState = {};
+        $(window).keydown(function(event) {
+            keyState[event.keyCode || event.which] = true;
+        })
+        $(window).keyup(function(event) {
+            keyState[event.keyCode || event.which] = false;
+        })
+        function broadcastKeyState() {
+            var data = new Map();
+            data.set("type", "keypress");
+            data.set("code", keyState);
+            chain.delegateJob(data);
+            setTimeout(broadcastKeyState, 30);
         }
-    }
-    
-    function setHighScore(){
-        console.log("settingHighScore");
-        $.ajax({
-           type:'POST',
-           url:'/gameOfLife/assets/PHP/highScore.php',
-           data:{"action": 1},
-           success:function(result){
-                    //result is your result from the xhttpRequest.
-                    console.log("result2" + result);
-                    highscore = result;
-                    $highscore.text(highscore);
-                }
+        broadcastKeyState();
+        
+        //make sure canvas always fits in window;
+        $(window).resize(function( event ) {
+            canvas.fitToWindow();
+        });
+        
+        //broadcasts when user clicks the screen
+        canvas.canvas.click(function(event) {
+            console.log("canvas clicked");
+            var offset = canvas.position();
+            
+            //LOC = position on the canvas of click;
+            var loc = new Point(event.clientX, event.clientY);
+            loc.x = loc.x - offset.left;
+            loc.y = loc.y - offset.top;
+            loc.x *= canvas.densityWide();
+            loc.y *= canvas.densityHigh();
+            console.log(loc);
+            var data = new Map();
+            data.set("type", "click");
+            data.set("location", loc);
+            chain.delegateJob(data);
         });
     }
     
-    function setHighScoreName(){
-        console.log("settingHighScoreName");
-        $.ajax({
-            type:'POST',
-            url:'/gameOfLife/assets/PHP/highScore.php',
-            data:{"action2":1},
-            success:function(result){
-                    console.log("name" + result);
-                    username = result;
-                    $user.text(username);
-                }
-        })
-    }
-    
-    //reset the board, prepare for new game
-    function startOver(){
-        xFinishMin = xFinishMinStart;
-        xFinishMax = xFinishMaxStart;
-        yFinishMin = yFinishMinStart;
-        yFinishMax = yFinishMaxStart;
-        score = 0;
-        moving = false;
-        Xpos = Xstart;
-        $highscore.text(highscore);
-        Ypos = Ystart;
-        fillRandom(); //create the starting state for the grid by filling it with random cell
-        drawGrid();
-        drawPlayer();
-        drawFinish();
-    }
-    
-    
-	function createArray(rows) { //creates a 2 dimensional array of required height
-	    var arr = [];
-	    for (var i = 0; i < rows; i++) {
-	        arr[i] = [];
-	    }
-	    return arr;
-	}
-    
-    //check if the player is touching a red node. 
-    function playerDies(){
-        for (var x = Xpos -1; x <= Xpos + 1; x++){
-            for (var y = Ypos - 1; y <= Ypos + 1; y++){
-                if (theGrid[x][y] == 1){
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
+}
 
-	function fillRandom() { //fill the grid randomly
-	    for (var j = 0; j < gridHeight; j++) { //iterate through rows
-	        for (var k = 0; k < gridWidth; k++) { //iterate through columns
-	            theGrid[j][k] = Math.round(Math.random() -.44);
-                if (j > 20 && j < 70 && k > 50 && k < 100){//avoid the spawn point
-                    theGrid[j][k] = 0;
-                }
-                if (nearFinish(j,k)){//avoid the finish point
-                    theGrid[j][k] = 0;
-                }
-	        }
-	    }
-	}
-    
-    function playerWins(){//return true is player is touching finish
-        return (Xpos >= xFinishMin - 1 && Xpos <= xFinishMax && Ypos >= yFinishMin - 1 && Ypos <= yFinishMax);
+class ChainOfResponsibility {
+    constructor(elements) {
+        this.elements = elements;
+        this.canPropagate = true;
     }
     
-    function nearFinish(x,y){//return true if x,y are within 5 spots of the finish
-        return (x > xFinishMin - 5 && x < xFinishMax + 5 && y > yFinishMin - 5 && y < yFinishMax + 5);
-    }
-    
-    
-    function drawPlayer() {//draw player at Xpos Ypos such that it does not disrupt the game of life
-        $ctx.fillStyle = "green";
-        for (var x = Xpos -1; x <= Xpos + 1; x++){
-            for (var y = Ypos - 1; y <= Ypos + 1; y++){
-                $ctx.fillRect(x*fillsize,y*fillsize,fillsize,fillsize);
+    delegateJob(data) {
+        this.canPropagate = true;
+        for (let element of this.elements) {
+            if (this.canPropagate) {
+                (element.handle(this, data));
+            }
+            else {
+                //handler picked up job
+                break;
             }
         }
-        $ctx.fillStyle = "red";
     }
     
-    function drawFinish(){//draw finish
-        console.log("drawing finish");
-        $ctx.fillStyle = "gold";
-        for (var x = xFinishMin; x < xFinishMax; x++){
-            for (var y = yFinishMin; y < yFinishMax; y++){
-                $ctx.fillRect(x*fillsize,y*fillsize,fillsize,fillsize);
-            }
-        }
-        $ctx.fillStyle = "red";
+    stopPropogation() {
+        this.canPropagate = false;
+    }
+}
+    
+
+/*States and StateMachine*/
+//Manage different states of my application
+class StateMachine {
+    constructor(states = new Set()) {
+        this.currentState = null;
+        this.states = states;
         
     }
+    addState(state) {
+        this.states.add(state);
+    }
+    deleteState(state) {
+        this.states.delete(state);
+    }
+    
+    changeState(nextState) {
+        console.log("changing to %s \n", nextState);
+        if (this.currentState) {
+            if (this.currentState.name == nextState) {
+                console.log("already in %s\n", nextState);
+                return;
+            }
+            else {
+                this.currentState.leave();
+            }
+        }
+        for (let state of this.states) {
+            if (state.name == nextState) {
+                this.currentState = state;
+                this.currentState.enter();
+                break;
+            }
+        }
+        
+    }
+}
 
-	function drawGrid() { //draw the contents of the grid onto a canvas
-	    var liveCount = 0;
-	    $ctx.clearRect(0, 0, $cHeight, $cWidth); //this should clear the canvas ahead of each redraw
-	    for (var j = 1; j < gridHeight; j++) { //iterate through rows
-	        for (var k = 1; k < gridWidth; k++) { //iterate through columns
-	            if (theGrid[j][k] === 1) {
-	                $ctx.fillRect(j*fillsize, k*fillsize, fillsize, fillsize);
-	                liveCount++;
-	                
-	            }
-	        }
-	    }
-	    console.log(liveCount/100);
-	}
-    
-    function onBorder(x, y){
-        return x == 2 || x == gridHeight - 2 || y == 2 || y == gridHeight - 2;
+class State {
+    constructor(name, elements, canvas) {
+        this.name = name;
+        this.elements = elements;
+        this.canvas = canvas;
     }
     
-    function nearPlayer(x, y){
-        return (x > Xpos - 10 && x < Xpos + 10 && y > Ypos - 10 && y < Ypos + 10);
+    enter() {
+        console.log("entering state %s", this.name);
     }
     
-    //ensures game doesn't end by adding random squares (mutations).
-    function addChaos(x, y){
-        if (!nearPlayer(x,y) && !nearFinish(x,y)){
-            return (Math.random()*Math.random()*Math.random() > .95);
+    leave() {
+        console.log("leaving state %s", this.name);
+        console.log("here");
+        while(this.elements.length > 0) {
+            this.elements.pop();
+        }
+    }
+}
+
+class HomeState extends State {
+    constructor(elements, canvas) {
+        super("home", elements, canvas);
+    }
+    
+    enter() {
+        super.enter();
+        this.canvas.setPixelDensity(2000, 2000);
+        
+        var h = this.canvas.pixelHeight();
+        var w = this.canvas.pixelWidth();
+        
+        var title = new TextBox("white", new Point(w/6, 0), 2*w/3, h/6, "Nathan's Game Of Life", "home");
+        
+        var startSolo = new TextBox("yellow", new Point(w/6, h/4), w/3, h/6, "Start Game", "game");
+        
+        this.elements.push(...[title, startSolo]);
+    }
+}
+
+
+class GameState extends State {
+    constructor(elements, canvas) {
+        super("game", elements, canvas);
+
+    }
+    enter() {
+        super.enter();
+        
+        this.canvas.setPixelDensity(175, 175);
+        var h = this.canvas.pixelHeight();
+        var w = this.canvas.pixelWidth();
+        
+        //set up user and finish
+        var user = new User(new Point(Math.floor(w/9), Math.floor(h/2)));
+        var finish = new Finish(new Point(Math.floor(7*w/12), Math.floor(h/2)), this.canvas);
+        
+        
+        //set up the border walls
+        var leftWall = new Wall(this.canvas.pixelHeight(), new Point(0, 0), 's');
+        var topWall = new Wall(this.canvas.pixelWidth(), new Point(0,0), 'e');
+        var br = new Point(this.canvas.pixelWidth() - 1, this.canvas.pixelHeight() - 1);
+        var rightWall = new Wall(this.canvas.pixelHeight(), br, 'n');
+        var bottomWall = new Wall(this.canvas.pixelWidth(), br, 'w');
+        
+        var wallList = [leftWall, topWall, rightWall, bottomWall];
+        
+        var walls = new WallNetwork(wallList);
+        
+        
+        //set up the mines, not touching other blocks
+        var mines = new Array(h);
+        for (let i = 0; i < h; i ++) {
+            mines[i] = new Array(w);
+        }
+        for (let i = 0; i < h; i++) {
+            for (let j = 0; j < w; j++) {
+                let mineLoc = new Point(i, j);
+                let newMine = new Landmine(mineLoc);
+
+                //only activate some mines that aren't near important elements to start
+                if (Math.random() > .93 && newMine.distanceTo(user) > 10 && newMine.distanceTo(finish) > 10 && !newMine.isTouching(walls)) {
+                    newMine.activate();
+                                    
+                }
+                mines[i][j] = newMine;
+            }
+        }
+        
+        //mines is a 2d array;
+        var landmines = new LandmineNetwork(mines);
+
+        //add all the elements to the elements
+        this.elements.push(user, finish, walls, landmines);
+        
+    }
+    
+}
+
+
+
+/*Canvas Elements*/
+
+//The Element is the building block of the game, 
+//Elements can UPDATE(), HANDLE(), and PAINT()
+//A list of Elements will be be managed by the current State
+//The Engine can make calls to update on an Element
+//The Engine's Render Loops makes calls to Element's Paint
+//The Event Listener makes calls to the Chain of Responsibilities, 
+//which gives each Element the chance to claim responsibility and act
+class Element {
+    paint(canvas) {
+        return;
+    }
+    handle(chain, data) {
+        return;
+    }
+    update(elements) {
+        return false;
+    }
+}
+
+//elements on the home menu
+class HomeElem extends Element {
+    constructor() {
+        super();
+        this.isInHome = true;
+    }
+}
+
+class ClickToNewStateInHome extends HomeElem {
+    constructor(nextState) {
+        super();
+        this.hasBeenClicked = false;
+        this.nextState = nextState;
+    }
+    
+    handle(chain, data) {
+        if (data.get("type") == "click") {
+            var loc = data.get("location");
+            if(this.clicked(loc)) {
+                this.hasBeenClicked = true;
+                chain.stopPropogation();
+            }
+        }
+    }
+    
+    update(elements) {
+        if (this.hasBeenClicked) {
+            console.log("Home Element Clicked");
+            this.hasBeenClicked = false;
+            return this.nextState;
         }
         return false;
     }
     
-	function updateGrid() { //perform one iteration of grid update
-	   
-	    for (var j = 1; j < gridHeight - 1; j++) { //iterate through rows
-	        for (var k = 1; k < gridWidth - 1; k++) { //iterate through columns
-	            var totalCells = 0;
-	            //add up the total values for the surrounding cells
-	            totalCells += theGrid[j - 1][k - 1]; //top left
-	            totalCells += theGrid[j - 1][k]; //top center
-	            totalCells += theGrid[j - 1][k + 1]; //top right
+    clicked(point) {
+        throw "abstract clicked method cannot be called";
+    }
+} 
 
-	            totalCells += theGrid[j][k - 1]; //middle left
-	            totalCells += theGrid[j][k + 1]; //middle right
+class Box extends ClickToNewStateInHome {
+    constructor(colr, topLeft, width, height, nextState) {
+        super(nextState);
+        this.colr = colr;
+        this.topLeft = topLeft;
+        this.width = width;
+        this.height = height;
+    }
+    
+    paint(canvas) {
+        canvas.fillBox(this.colr, this.topLeft, this.width, this.height);
+    }
+    
+    clicked(point) {
+        console.log(this.topLeft.x);
+        console.log(point.x);
+        var inX = this.topLeft.x < point.x && this.topLeft.x + this.width > point.x;
+        var inY = this.topLeft.y < point.y && this.topLeft.y + this.height > point.y;
+        return inX && inY;
+    }
+}
 
-	            totalCells += theGrid[j + 1][k - 1]; //bottom left
-	            totalCells += theGrid[j + 1][k]; //bottom center
-	            totalCells += theGrid[j + 1][k + 1]; //bottom right
+class TextBox extends Box {
+    constructor(colr, topLeft, width, height, text, nextState, font = "Arial") {
+        super(colr, topLeft, width, height, nextState);
+        this.font = (height/4).toString() + "px " + font;
+        console.log(this.font);
+        this.text = text;
+    }
+    
+    paint(canvas) {
+        super.paint(canvas);
+        canvas.addText(this.topLeft, this.width, this.height, this.text, this.font);
+    }
+}
 
-	            //apply the rules to each cell
-	            switch (totalCells) {
-	                case 2:
-	                    mirrorGrid[j][k] = theGrid[j][k];
-	                   
-	                    break;
-	                case 3:
-	                    mirrorGrid[j][k] = 1; //live
-	                    
-	                    break;
-	                default:
-	                    mirrorGrid[j][k] = 0; //die
-	            }
-                
-                if (nearFinish(j,k)){
-                    mirrorGrid[j][k] = 0;
+//elements in the arena
+
+class ArenaAbstraction extends Element {
+    constructor(colr) {
+        super();
+        this.colr = colr;
+    }
+    
+    paint(canvas) {
+        for (let block of this.occupiedBlocks()) {
+            canvas.fillPixel(this.colr, block);
+        }
+    }
+    
+    isTouching(that) {
+        return this.distanceTo(that) <= 0;
+    }    
+    
+    //very slow, brute force, but inclusive min-distance function
+    distanceTo(that) {
+        
+        var minDistance = Number.MAX_VALUE;
+        for (let thisBlock of this.occupiedBlocks()) {
+            for (let thatBlock of that.occupiedBlocks()) {
+
+                if (thisBlock.distanceTo(thatBlock) < minDistance) {
+                    minDistance = thisBlock.distanceTo(thatBlock);
                 }
-                
-                if (onBorder(j,k)){
-                    mirrorGrid[j][k] = 1;
+            }
+        }
+        return minDistance;
+    }
+    
+    
+    occupiedBlocks() {
+        throw "Abstract Class can't occupy blocks";
+    }
+}
+
+class ArenaElem extends ArenaAbstraction {
+    constructor(size, colr, location, occupiedFunc) {
+        super(colr);
+        this.size = size;
+        this.location = location;
+        this.occupiedFunc = occupiedFunc;
+    }
+    
+    
+    occupiedBlocks() {
+        return this.occupiedFunc(this.size, this.location);
+    }
+    
+    spaceOccupied() {
+        return this.occupiedBlocks().size;
+    }
+    
+
+}
+
+class LandmineNetwork extends ArenaAbstraction {
+    //mines is a 2d array of landmines
+    constructor(mines) {
+        super(mines[0][0].colr);
+        this.mines = mines;
+        this.toUpdate = new Set();
+        this.possibleUpdateNext = new Set();
+        for (let row of this.mines) {
+            for (let mine of row) {
+                this.possibleUpdateNext.add(mine);
+            }
+        }
+        this.calculateMineNeighbors();
+
+        
+    }
+    
+    occupiedBlocks() {
+        //iterates through this.walls and adds each of the walls occupied blocks
+        var occupied = new Set();
+        for (let row of this.mines) {
+            for (let mine of row) {
+                if (mine.isOn) {
+                    for (let block of mine.occupiedBlocks()) {
+                        occupied.add(block);
+                    }
                 }
-                if (addChaos(j,k)){
-                    mirrorGrid[j][k] = 1;
-                }
+            }
+
+        }
+        return occupied;
+    }
+    
+    //this unintelligible (but efficient) function returns 
+    //all the mines ajacent to a mine;
+    adjacentMines(mine) {
+        var adjacent = new Set();
+        
+        var mine2 = new Landmine(mine.location, mine.size + 1);
+        
+        for (let block of mine2.occupiedBlocks()) {
+            if (
+                //block isn't in original mine
+                (block.x > mine2.location.x + mine.size || block.x < mine2.location.x - mine.size || block.y > mine2.location.y + mine.size || block.y < mine2.location.y - mine.size)
+               
+               &&
                 
-	        }
-	    }
+                //block isn't over edge
+                (block.x > 0 && block.x < this.mines.length && block.y > 0 && block.y < this.mines[0].length)
+               
+               
+               ) {
+                adjacent.add(this.mines[block.x][block.y]);
+            }
+        }
+        
+        var mine2 = null;
+        
+        return adjacent;
+    }
+    
+    //calculates the number of neighbors for each mine
+    //adds those neighbors to list of neighbors for each mine;
+    calculateMineNeighbors() {
+        for (let i = 0; i < this.mines.length; i++) {
+            for (let j = 0; j < this.mines[0].length; j++) {
+                var mine = this.mines[i][j];
+                mine.neighbors.clear();
+                let adjacents = this.adjacentMines(mine);
+                for (let otherMine of adjacents) {
+                    mine.addNeighbor(otherMine);
+                }
+            }   
+        }
+    }
+    
+    //John Conway's Logic Here
+    update(elements) {
+        
+        //updates the things queued to update
+        for (let mine of this.toUpdate) {
+            if (mine.activateNext) {
+                mine.activate();
+                mine.activateNext = false;
+            }
+            else if (mine.deactivateNext) {
+                mine.deactivate(); 
+                mine.deactivateNext = false;
+            }
+            this.toUpdate.delete(mine);
+            for (let neighbor of mine.neighbors) {
+                this.possibleUpdateNext.add(neighbor);
+            }
+        }
+        
+        //queues a random square to prevent stead state
+        var chaosx = Math.floor(Math.random()*this.mines.length);
+        var chaosy = Math.floor(Math.random()*this.mines[0].length);
+        var mine = this.mines[chaosx][chaosy]
+        var chaos = true;
+        
+        var finish = null;
+        for (let elem of elements) {
+            if (elem instanceof Player) {
+                if (mine.distanceTo(elem) < 50) {
+                    chaos = false;
+                }
+            }
+            if (elem instanceof Finish) {
+                finish = elem;
+            }
+        }
+        
+        
+        //john conways logic on squares where game is moving
+        for (let mine of this.possibleUpdateNext) {
+            switch(mine.numActivatedNeighbors) {
+                case 2:
+                    break;
+                case 3:
+                    if (!mine.isOn) {
+                        if (finish) {
+                            if (mine.distanceTo(finish) > 7) {
+                                mine.activateNextTurn();
+                                this.toUpdate.add(mine);
+                            }     
+                        }
+                    }
+                    break;
+                default:
+                    if (mine.isOn) {
+                        mine.deactivateNextTurn();
+                        this.toUpdate.add(mine);
+                    }
+                    break;
+            }
+            //mines on finish despawn;
+            if (finish) {
+                if (!(mine.distanceTo(finish) > 7)) {
+                    mine.deactivateNextTurn();
+                    this.toUpdate.add(mine);
+                }     
+            }
+        }
+        this.possibleUpdateNext.clear();
+        
+        //add in the random squares here
+        if (chaos) {
+            mine.activateNextTurn();
+            this.toUpdate.add(mine);
+            this.possibleUpdateNext.add(mine);
+        }
 
-	    //mirror edges to create wraparound effect
-        /*
-	    for (var l = 1; l < gridHeight - 1; l++) { //iterate through rows
-	        //top and bottom
-	        mirrorGrid[l][0] = mirrorGrid[l][gridHeight - 3];
-	        mirrorGrid[l][gridHeight - 2] = mirrorGrid[l][1];
-	        //left and right
-	        mirrorGrid[0][l] = mirrorGrid[gridHeight - 3][l];
-	        mirrorGrid[gridHeight - 2][l] = mirrorGrid[1][l];
-
-	    }
-        */
 
 
-	    //swap grids
-	    var temp = theGrid;
-	    theGrid = mirrorGrid;
-	    mirrorGrid = temp;
-	}
 
-});
+
+    }
+}
+
+class WallNetwork extends ArenaAbstraction {
+    constructor(walls) {
+        super(walls[0].colr);
+        this.walls = walls;
+    }
+    
+    occupiedBlocks() {
+        //iterates through this.walls and adds each of the walls occupied blocks
+        var occupied = new Set();
+        for (let wall of this.walls) {
+            for (let block of wall.occupiedBlocks()) {
+                occupied.add(block);
+            }
+        }
+        return occupied;
+                    
+    }
+}
+
+class Wall extends ArenaElem {
+    //direction is a char n, s, e, w (cardinal direction);
+    //SIZE = 6 implies a 6 unit wall.
+    constructor(size, startLoc, direction = 'n') {
+        //returns a function for occupied spaces of a line in direction = THIS.DIRECTION
+        function lineInTheDirection(direction) {
+            var changeX = 0;
+            var changeY = 0;
+            switch (direction) {
+                case 'n':
+                    changeY =  -1;
+                    break;
+                case 's':
+                    changeY = 1;
+                    break;
+                case 'e':
+                    changeX = 1;
+                    break;
+                //west is default
+                default:
+                    changeX = -1;
+            }
+            //tail recursive optimized function
+            var makeLine = function() {
+                var occupied = new Set();
+                for (let i = 0; i < size; i++) {
+                    occupied.add(new Point(startLoc.x + i*changeX, startLoc.y + i*changeY));
+                }
+                return occupied;
+            }
+            return makeLine;
+        }
+        super(size, "purple", startLoc, lineInTheDirection(direction));
+        this.direction = direction;
+    }
+}
+
+class ArenaSquare extends ArenaElem {
+    constructor(size, colr, location) {
+        function makeSquare(size, startLoc) {
+            var occupied = new Set();
+            for (let i = -size; i <= size; i++) {
+                for (let j = -size; j <= size; j++) {
+                    occupied.add(new Point(startLoc.x + i, startLoc.y + j));
+                }
+            }
+            return occupied;
+        }
+        super(size, colr, location, makeSquare);   
+    }
+    
+    distanceTo(that) {
+        if (that instanceof ArenaSquare) {
+            return this.location.distanceTo(that.location) - this.size - that.size;
+        }
+        return super.distanceTo(that);
+    }
+}
+
+class Landmine extends ArenaSquare {
+    //landmine's has property is on, s.t. if a landmine 
+    //is on and a Player is on the same square, the player will lose health
+    constructor(location, size = 0) {
+        super(size, "red", location);
+        this.isOn = false;
+        this.activateNext = false;
+        this.deactivateNext = false;
+        
+        //adjacent mines
+        var set = new Set();
+        this.neighbors = set;
+        
+        //small efficieny booster so I don't have to recalculate
+        this.numActivatedNeighbors = 0;
+    }
+    
+    activate() {
+        if (!this.isOn) {
+            this.isOn = true;
+            for (let neighbor of this.neighbors) {
+                neighbor.numActivatedNeighbors += 1;
+            }
+        }
+    }
+    
+    deactivate() {
+        if (this.isOn) {
+            this.isOn = false;
+            for (let neighbor of this.neighbors) {
+                neighbor.numActivatedNeighbors -=1;
+            }
+        }
+    }
+    
+    activateNextTurn() {
+        this.activateNext = true;
+    }
+    
+    deactivateNextTurn() {
+        this.deactivateNext = true;
+    }
+    
+    addNeighbor(otherMine) {
+        this.neighbors.add(otherMine);
+        if (otherMine.isOn) {
+            this.numActivatedNeighbors += 1;
+        }
+    }
+}
+
+class Player extends ArenaSquare {
+    //velocity is a vector(TUPLE) representing change in location
+    constructor(colr, location, size = 1) {
+        super(size, colr, location);
+        this.health = 1;
+    }
+    move(velocity) {
+        this.location.x += velocity.x;
+        this.location.y += velocity.y;
+    }
+    
+
+}
+
+class User extends Player {
+    constructor(location, size = 2) {
+        super("blue", location);
+    }
+    handle(chain, data) {
+        if (data.get("type") == "keypress") {
+            var code = data.get("code");
+            if (code[87] || code[38]) {
+                //w or up
+                this.move(new Point(0, -1));
+            } if (code[65] || code[37]) {
+                //a or left
+                this.move(new Point(-1, 0));
+            } if (code[83] || code[40]) {
+                //s or down
+                this.move(new Point(0, 1));
+            } if (code[68] || code[39]) {
+                //d or right
+                this.move(new Point(1, 0));
+            }
+        }
+    }
+    update(elements) {
+        for (let elem of elements) {
+            if (this.isTouching(elem)) {
+                if (elem instanceof Finish) {
+                    //player won, increment score
+                    elem.moveRandom();
+                } else if (elem instanceof WallNetwork || elem instanceof LandmineNetwork) {
+                    return "home";
+                }
+            }
+        }
+    }
+    
+    
+}
+
+class Villain extends Player {
+    constructor(location, size = 1) {
+        super(size, "gray", location);
+    }
+    update(elements) {
+        console.log("IMPLEMENT, THIS IS WHERE THE AI GOES");
+    }
+}
+
+class Finish extends ArenaSquare {
+    constructor(location, canvas, size = 4) {
+        super(size, "green", location);
+        
+        
+        //unfortunately, the finish needs a notion of the canvas to move itself
+        this.canvas = canvas;
+    }
+    
+    //moves the finish to a random spot on canvas;
+    moveRandom() {
+        let c = this.canvas;
+        this.location = new Point(Math.round(Math.random()*c.w*.8 + c.w*.10), Math.round(Math.random()*c.h*.8 + c.h*.10));
+    }
+    
+    
+}
+
+
+/*General Helpers*/
+
+class Tuple{
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+    }
+}
+
+class Point extends Tuple{
+    constructor(x, y) {
+        super(x, y);
+    }
+    
+    //distance, can only move two directions
+    distanceTo(point) {
+        return Math.abs(this.x - point.x) + Math.abs(this.y - point.y);
+    }
+    
+    
+}

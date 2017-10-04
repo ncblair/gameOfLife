@@ -8,9 +8,8 @@ The Goal of the game is to get to a gold square, which will increase the players
 
 ## Future Improvements
 ___
-- Move to an Object Oriented Scheme:
-    - makes it easier to implement multiple goals/players
-    - more intuitive, improves readability
+- Get High Score Running, Efficiency Improvements, Loading Screen.
+- Bug Fixes.
 - Program AI
     - Add Player VS. Computer mode
 - Add Music
