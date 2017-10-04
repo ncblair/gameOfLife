@@ -232,6 +232,7 @@ class StateMachine {
     constructor(states = new Set()) {
         this.currentState = null;
         this.states = states;
+        
     }
     addState(state) {
         this.states.add(state);
@@ -251,11 +252,11 @@ class StateMachine {
                 this.currentState.leave();
             }
         }
-        
         for (let state of this.states) {
             if (state.name == nextState) {
                 this.currentState = state;
                 this.currentState.enter();
+                break;
             }
         }
         
@@ -302,6 +303,7 @@ class HomeState extends State {
     }
 }
 
+
 class GameState extends State {
     constructor(elements, canvas) {
         super("game", elements, canvas);
@@ -309,19 +311,20 @@ class GameState extends State {
     }
     enter() {
         super.enter();
-        this.canvas.setPixelDensity(100, 100);
+        
+        this.canvas.setPixelDensity(175, 175);
         var h = this.canvas.pixelHeight();
         var w = this.canvas.pixelWidth();
         
         //set up user and finish
         var user = new User(new Point(Math.floor(w/9), Math.floor(h/2)));
-        var finish = new Finish(new Point(Math.floor(7*w/12), Math.floor(h/2)));
+        var finish = new Finish(new Point(Math.floor(7*w/12), Math.floor(h/2)), this.canvas);
         
         
         //set up the border walls
         var leftWall = new Wall(this.canvas.pixelHeight(), new Point(0, 0), 's');
         var topWall = new Wall(this.canvas.pixelWidth(), new Point(0,0), 'e');
-        var br = new Point(this.canvas.pixelHeight() - 1, this.canvas.pixelWidth() - 1);
+        var br = new Point(this.canvas.pixelWidth() - 1, this.canvas.pixelHeight() - 1);
         var rightWall = new Wall(this.canvas.pixelHeight(), br, 'n');
         var bottomWall = new Wall(this.canvas.pixelWidth(), br, 'w');
         
@@ -641,9 +644,8 @@ class LandmineNetwork extends ArenaAbstraction {
                             if (mine.distanceTo(finish) > 7) {
                                 mine.activateNextTurn();
                                 this.toUpdate.add(mine);
-                            }        
+                            }     
                         }
-          
                     }
                     break;
                 default:
@@ -652,6 +654,13 @@ class LandmineNetwork extends ArenaAbstraction {
                         this.toUpdate.add(mine);
                     }
                     break;
+            }
+            //mines on finish despawn;
+            if (finish) {
+                if (!(mine.distanceTo(finish) > 7)) {
+                    mine.deactivateNextTurn();
+                    this.toUpdate.add(mine);
+                }     
             }
         }
         this.possibleUpdateNext.clear();
@@ -861,14 +870,21 @@ class Villain extends Player {
 }
 
 class Finish extends ArenaSquare {
-    constructor(location, size = 4) {
+    constructor(location, canvas, size = 4) {
         super(size, "green", location);
+        
+        
+        //unfortunately, the finish needs a notion of the canvas to move itself
+        this.canvas = canvas;
     }
     
-    //move to a random spot
-    move() {
-        console.log("IMPLEMENT");
+    //moves the finish to a random spot on canvas;
+    moveRandom() {
+        let c = this.canvas;
+        this.location = new Point(Math.round(Math.random()*c.w*.8 + c.w*.10), Math.round(Math.random()*c.h*.8 + c.h*.10));
     }
+    
+    
 }
 
 
