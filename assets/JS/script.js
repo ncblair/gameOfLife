@@ -294,26 +294,14 @@ class GameState extends State {
     }
     enter() {
         super.enter();
-        this.canvas.setPixelDensity(30, 30);
+        this.canvas.setPixelDensity(150, 150);
         var h = this.canvas.pixelHeight();
         var w = this.canvas.pixelWidth();
         
         //set up user and finish
-        var user = new User(new Point(Math.floor(w/12), Math.floor(h/2)));
+        var user = new User(new Point(Math.floor(w/9), Math.floor(h/2)));
         var finish = new Finish(new Point(Math.floor(7*w/12), Math.floor(h/2)));
         
-        //set up the mines
-        var mines = [];
-        
-        for (let i = 0; i < h*w; i++) {
-            let mineLoc = new Point(i % w, Math.floor(i / h));
-            let newMine = new Landmine(mineLoc);
-            
-            if (Math.random() > .9) {
-                newMine.activate();
-            }
-            mines.push(newMine);
-        }
         
         //set up the border walls
         var leftWall = new Wall(this.canvas.pixelHeight(), new Point(0, 0), 's');
@@ -324,10 +312,26 @@ class GameState extends State {
         
         var wallList = [leftWall, topWall, rightWall, bottomWall];
         
-        var landmines = new LandmineNetwork(mines);
         var walls = new WallNetwork(wallList);
         
+        
+        //set up the mines, not touching other blocks
+        var mines = [];
+        
+        for (let i = 0; i < h*w; i++) {
+            let mineLoc = new Point(i % w, Math.floor(i / h));
+            let newMine = new Landmine(mineLoc);
+            
+            //only activate some mines that aren't near important elements to start
+            if (Math.random() > .7 && newMine.distanceTo(user) > 10 && newMine.distanceTo(finish) > 10 && !newMine.isTouching(walls)) {
+                newMine.activate();
+            }
+            mines.push(newMine);
+        }
+        
+        var landmines = new LandmineNetwork(mines);
 
+        //add all the elements to the elements
         this.elements.push(user, finish, walls, landmines);
         
     }
@@ -453,7 +457,7 @@ class ArenaAbstraction extends Element {
     }
     
     isTouching(that) {
-        return distanceTo(that) <= 0;
+        return this.distanceTo(that) <= 0;
     }    
     
     //very slow, brute force, but inclusive min-distance function
@@ -462,6 +466,7 @@ class ArenaAbstraction extends Element {
         var minDistance = Number.MAX_VALUE;
         for (let thisBlock of this.occupiedBlocks()) {
             for (let thatBlock of that.occupiedBlocks()) {
+
                 if (thisBlock.distanceTo(thatBlock) < minDistance) {
                     minDistance = thisBlock.distanceTo(thatBlock);
                 }
@@ -592,7 +597,10 @@ class ArenaSquare extends ArenaElem {
     }
     
     distanceTo(that) {
-        return this.location.distanceTo(that.location) - this.size;
+        if (that instanceof ArenaSquare) {
+            return this.location.distanceTo(that.location) - this.size;
+        }
+        return super.distanceTo(that);
     }
 }
 
@@ -662,7 +670,7 @@ class Villain extends Player {
 }
 
 class Finish extends ArenaSquare {
-    constructor(location, size = 1) {
+    constructor(location, size = 2) {
         super(size, "green", location);
     }
     
@@ -689,7 +697,7 @@ class Point extends Tuple{
     
     //distance, can only move two directions
     distanceTo(point) {
-        return Math.abs(this.x - x) + Math.abs(this.y - y);
+        return Math.abs(this.x - point.x) + Math.abs(this.y - point.y);
     }
     
     
