@@ -409,7 +409,6 @@ class ClickToNewStateInHome extends HomeElem {
             }
         }
     }
-<<<<<<< HEAD
     
     update(elements) {
         if (this.hasBeenClicked) {
@@ -420,18 +419,7 @@ class ClickToNewStateInHome extends HomeElem {
         return false;
     }
     
-=======
     
-    update(elements) {
-        if (this.hasBeenClicked) {
-            console.log("Home Element Clicked");
-            this.hasBeenClicked = false;
-            return this.nextState;
-        }
-        return false;
-    }
-    
->>>>>>> b63c1f4a30a6bf36e4a1c5784ac214961075f61c
     clicked(point) {
         throw "abstract clicked method cannot be called";
     }
@@ -445,7 +433,6 @@ class Box extends ClickToNewStateInHome {
         this.width = width;
         this.height = height;
     }
-<<<<<<< HEAD
     
     paint(canvas) {
         canvas.fillBox(this.colr, this.topLeft, this.width, this.height);
@@ -474,36 +461,6 @@ class TextBox extends Box {
     }
 }
 
-=======
-    
-    paint(canvas) {
-        canvas.fillBox(this.colr, this.topLeft, this.width, this.height);
-    }
-    
-    clicked(point) {
-        console.log(this.topLeft.x);
-        console.log(point.x);
-        var inX = this.topLeft.x < point.x && this.topLeft.x + this.width > point.x;
-        var inY = this.topLeft.y < point.y && this.topLeft.y + this.height > point.y;
-        return inX && inY;
-    }
-}
-
-class TextBox extends Box {
-    constructor(colr, topLeft, width, height, text, nextState, font = "Arial") {
-        super(colr, topLeft, width, height, nextState);
-        this.font = (height/4).toString() + "px " + font;
-        console.log(this.font);
-        this.text = text;
-    }
-    
-    paint(canvas) {
-        super.paint(canvas);
-        canvas.addText(this.topLeft, this.width, this.height, this.text, this.font);
-    }
-}
-
->>>>>>> b63c1f4a30a6bf36e4a1c5784ac214961075f61c
 //elements in the arena
 
 class ArenaAbstraction extends Element {
