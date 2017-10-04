@@ -910,8 +910,5 @@ class Point extends Tuple{
     
 }
 
-
-
-    
     
     
