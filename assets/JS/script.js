@@ -120,7 +120,7 @@ class Engine {
         this.conductor = new StateMachine();
         this.conductor.addState(new HomeState(this.elements, this.canvas));
         this.conductor.addState(new GameState(this.elements, this.canvas));
-        this.conductor.changeState("game");
+        this.conductor.changeState("home");
         //listen for events
 
         var listener = new CanvasListener(new ChainOfResponsibility(this.elements), this.canvas);
@@ -128,13 +128,14 @@ class Engine {
         //render
         this.render();
         //update
-        setInterval(this.update.bind(this), 100);
+        setInterval(this.update.bind(this), 35);
     }
     update() {
         for (let element of this.elements) {
             var next = element.update(this.elements)
             if (next) {
                 this.conductor.changeState(next)
+                break;
             }
         }
     }
@@ -170,7 +171,7 @@ class CanvasListener {
             data.set("type", "keypress");
             data.set("code", keyState);
             chain.delegateJob(data);
-            setTimeout(broadcastKeyState, 50);
+            setTimeout(broadcastKeyState, 30);
         }
         broadcastKeyState();
         
@@ -274,6 +275,10 @@ class State {
     
     leave() {
         console.log("leaving state %s", this.name);
+        console.log("here");
+        while(this.elements.length > 0) {
+            this.elements.pop();
+        }
     }
 }
 
@@ -295,13 +300,6 @@ class HomeState extends State {
         
         this.elements.push(...[title, startSolo]);
     }
-    
-    leave() {
-        super.leave();
-        for (let element of this.elements) {
-            this.elements.pop();
-        }
-    }
 }
 
 class GameState extends State {
@@ -311,7 +309,7 @@ class GameState extends State {
     }
     enter() {
         super.enter();
-        this.canvas.setPixelDensity(400, 400);
+        this.canvas.setPixelDensity(100, 100);
         var h = this.canvas.pixelHeight();
         var w = this.canvas.pixelWidth();
         
@@ -343,7 +341,7 @@ class GameState extends State {
                 let newMine = new Landmine(mineLoc);
 
                 //only activate some mines that aren't near important elements to start
-                if (Math.random() > .9 && newMine.distanceTo(user) > 10 && newMine.distanceTo(finish) > 10 && !newMine.isTouching(walls)) {
+                if (Math.random() > .93 && newMine.distanceTo(user) > 10 && newMine.distanceTo(finish) > 10 && !newMine.isTouching(walls)) {
                     newMine.activate();
                                     
                 }
@@ -359,12 +357,6 @@ class GameState extends State {
         
     }
     
-    leave() {
-        super.leave();
-        for (let element of this.elements) {
-            this.elements.pop();
-        }
-    }
 }
 
 
@@ -582,33 +574,6 @@ class LandmineNetwork extends ArenaAbstraction {
         
         var mine2 = null;
         
-        
-        /*
-        for (let i = 0; i < 2*(mine.size + 1); i++) {
-            //if statements help avoid null pointers
-            if (this.mines[mine.location.x + (mine.size + 1)]) {
-                adjacent.add(this.mines[mine.location.x + (mine.size + 1)][mine.location.y - (mine.size + 1) + i]);
-            }
-            
-            if (this.mines[mine.location.x - (mine.size + 1)]) {
-                adjacent.add(this.mines[mine.location.x - (mine.size + 1)][mine.location.y - (mine.size + 1) + i]);
-            }
-            if (this.mines[mine.location.x - (mine.size + 1) + i]) {
-               adjacent.add(this.mines[mine.location.x - (mine.size + 1) + i][mine.location.y + (mine.size + 1)]); 
-            }
-            
-            if (this.mines[mine.location.x - (mine.size + 1) + i]) {
-                adjacent.add(this.mines[mine.location.x - (mine.size + 1) + i][mine.location.y - (mine.size + 1) + i]);
-            }
-            
-        }
-        for (let mine of adjacent) {
-            if (!mine) {
-                adjacent.delete(mine);
-            }
-        }
-        
-        */
         return adjacent;
     }
     
@@ -629,6 +594,8 @@ class LandmineNetwork extends ArenaAbstraction {
     
     //John Conway's Logic Here
     update(elements) {
+        
+        //updates the things queued to update
         for (let mine of this.toUpdate) {
             if (mine.activateNext) {
                 mine.activate();
@@ -642,16 +609,41 @@ class LandmineNetwork extends ArenaAbstraction {
             for (let neighbor of mine.neighbors) {
                 this.possibleUpdateNext.add(neighbor);
             }
-            this.possibleUpdateNext.add(mine);
         }
+        
+        //queues a random square to prevent stead state
+        var chaosx = Math.floor(Math.random()*this.mines.length);
+        var chaosy = Math.floor(Math.random()*this.mines[0].length);
+        var mine = this.mines[chaosx][chaosy]
+        var chaos = true;
+        
+        var finish = null;
+        for (let elem of elements) {
+            if (elem instanceof Player) {
+                if (mine.distanceTo(elem) < 50) {
+                    chaos = false;
+                }
+            }
+            if (elem instanceof Finish) {
+                finish = elem;
+            }
+        }
+        
+        
+        //john conways logic on squares where game is moving
         for (let mine of this.possibleUpdateNext) {
             switch(mine.numActivatedNeighbors) {
                 case 2:
                     break;
                 case 3:
                     if (!mine.isOn) {
-                        mine.activateNextTurn();
-                        this.toUpdate.add(mine);                   
+                        if (finish) {
+                            if (mine.distanceTo(finish) > 7) {
+                                mine.activateNextTurn();
+                                this.toUpdate.add(mine);
+                            }        
+                        }
+          
                     }
                     break;
                 default:
@@ -663,6 +655,18 @@ class LandmineNetwork extends ArenaAbstraction {
             }
         }
         this.possibleUpdateNext.clear();
+        
+        //add in the random squares here
+        if (chaos) {
+            mine.activateNextTurn();
+            this.toUpdate.add(mine);
+            this.possibleUpdateNext.add(mine);
+        }
+
+
+
+
+
     }
 }
 
@@ -738,7 +742,7 @@ class ArenaSquare extends ArenaElem {
     
     distanceTo(that) {
         if (that instanceof ArenaSquare) {
-            return this.location.distanceTo(that.location) - this.size;
+            return this.location.distanceTo(that.location) - this.size - that.size;
         }
         return super.distanceTo(that);
     }
@@ -810,7 +814,7 @@ class Player extends ArenaSquare {
 }
 
 class User extends Player {
-    constructor(location, size = 1) {
+    constructor(location, size = 2) {
         super("blue", location);
     }
     handle(chain, data) {
@@ -831,6 +835,20 @@ class User extends Player {
             }
         }
     }
+    update(elements) {
+        for (let elem of elements) {
+            if (this.isTouching(elem)) {
+                if (elem instanceof Finish) {
+                    //player won, increment score
+                    elem.moveRandom();
+                } else if (elem instanceof WallNetwork || elem instanceof LandmineNetwork) {
+                    return "home";
+                }
+            }
+        }
+    }
+    
+    
 }
 
 class Villain extends Player {
@@ -843,7 +861,7 @@ class Villain extends Player {
 }
 
 class Finish extends ArenaSquare {
-    constructor(location, size = 2) {
+    constructor(location, size = 4) {
         super(size, "green", location);
     }
     
