@@ -312,7 +312,7 @@ class GameState extends State {
     }
     enter() {
         super.enter();
-        this.canvas.setPixelDensity(40, 40);
+        this.canvas.setPixelDensity(20, 20);
         var h = this.canvas.pixelHeight();
         var w = this.canvas.pixelWidth();
         
@@ -562,6 +562,29 @@ class LandmineNetwork extends ArenaAbstraction {
     //all the mines ajacent to a mine;
     adjacentMines(mine) {
         var adjacent = new Set();
+        
+        var mine2 = new Landmine(mine.location, mine.size + 1);
+        
+        for (let block of mine2.occupiedBlocks()) {
+            if (
+                //block isn't in original mine
+                (block.x > mine2.location.x + mine.size || block.x < mine2.location.x - mine.size || block.y > mine2.location.y + mine.size || block.y < mine2.location.y - mine.size)
+               
+               &&
+                
+                //block isn't over edge
+                (block.x > 0 && block.x < this.mines.length && block.y > 0 && block.y < this.mines[0].length)
+               
+               
+               ) {
+                adjacent.add(this.mines[block.x][block.y]);
+            }
+        }
+        
+        var mine2 = null;
+        
+        
+        /*
         for (let i = 0; i < 2*(mine.size + 1); i++) {
             //if statements help avoid null pointers
             if (this.mines[mine.location.x + (mine.size + 1)]) {
@@ -585,6 +608,8 @@ class LandmineNetwork extends ArenaAbstraction {
                 adjacent.delete(mine);
             }
         }
+        
+        */
         return adjacent;
     }
     
@@ -621,8 +646,8 @@ class LandmineNetwork extends ArenaAbstraction {
             this.possibleUpdateNext.add(mine);
         }
         for (let mine of this.possibleUpdateNext) {
-            console.log(mine);
-            console.log(mine.neighbors);
+            //console.log(mine);
+            //console.log(mine.neighbors);
             console.log(mine.numActivatedNeighbors);
             switch(mine.numActivatedNeighbors) {
                 case 2:
@@ -641,8 +666,6 @@ class LandmineNetwork extends ArenaAbstraction {
                     break;
             }
         }
-        console.log("possible %o", this.possibleUpdateNext);
-        console.log("toUpdate %o", this.toUpdate);
         //this.possibleUpdateNext.clear();
     }
 }
