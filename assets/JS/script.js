@@ -26,6 +26,7 @@ class Canvas {
         
         this.w = width;
         this.h = height;
+        
         this.context = canvas[0].getContext("2d");
         this.context.imageSmoothingEnabled = true;
         this.fitToWindow();
@@ -98,7 +99,7 @@ class Canvas {
     }
     
     clear() {
-        this.context.clearRect(0, 0, this.h, this.w);
+        this.context.clearRect(0, 0, this.w, this.h);
     }
 }
 
@@ -128,7 +129,7 @@ class Engine {
         //render
         this.render();
         //update
-        setInterval(this.update.bind(this), 35);
+        setInterval(this.update.bind(this), 50);
     }
     update() {
         for (let element of this.elements) {
@@ -171,7 +172,7 @@ class CanvasListener {
             data.set("type", "keypress");
             data.set("code", keyState);
             chain.delegateJob(data);
-            setTimeout(broadcastKeyState, 30);
+            setTimeout(broadcastKeyState, 50);
         }
         broadcastKeyState();
         
@@ -537,6 +538,7 @@ class LandmineNetwork extends ArenaAbstraction {
         
     }
     
+    
     occupiedBlocks() {
         //iterates through this.walls and adds each of the walls occupied blocks
         var occupied = new Set();
@@ -749,12 +751,13 @@ class ArenaSquare extends ArenaElem {
         }
         super(size, colr, location, makeSquare);   
     }
-    
-    distanceTo(that) {
+    isTouching(that) {
         if (that instanceof ArenaSquare) {
-            return this.location.distanceTo(that.location) - this.size - that.size;
+            //checks bounding boxes;
+            return Math.abs(this.location.x - that.location.x) < (this.size + that.size) && Math.abs(this.location.y - that.location.y) < (this.size + that.size) 
+        } else {
+            return super.isTouching(that);
         }
-        return super.distanceTo(that);
     }
 }
 
