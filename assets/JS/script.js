@@ -5,6 +5,7 @@
 
 $(document).ready(function () {
     "use strict";
+
     var c = document.getElementById('game-field');
     var cWidth = c.width;
     var cHeight = c.height;
@@ -601,6 +602,24 @@ class LandmineNetwork extends ArenaAbstraction {
     //John Conway's Logic Here
     update(elements) {
         
+        //queues a random square to prevent stead state
+        var chaosx = Math.floor(Math.random()*this.mines.length);
+        var chaosy = Math.floor(Math.random()*this.mines[0].length);
+        var mine = this.mines[chaosx][chaosy];
+        var chaos = true;
+        
+        var finish = null;
+        for (let elem of elements) {
+            if (elem instanceof Player) {
+                if (mine.distanceTo(elem) < 50) {
+                    chaos = false;
+                }
+            }
+            if (elem instanceof Finish) {
+                finish = elem;
+            }
+        }
+        
         //updates the things queued to update
         for (let mine of this.toUpdate) {
             if (mine.activateNext) {
@@ -616,26 +635,13 @@ class LandmineNetwork extends ArenaAbstraction {
                 this.possibleUpdateNext.add(neighbor);
             }
         }
-        
-        //queues a random square to prevent stead state
-        var chaosx = Math.floor(Math.random()*this.mines.length);
-        var chaosy = Math.floor(Math.random()*this.mines[0].length);
-        var mine = this.mines[chaosx][chaosy]
-        var chaos = true;
-        
-        var finish = null;
-        for (let elem of elements) {
-            if (elem instanceof Player) {
-                if (mine.distanceTo(elem) < 50) {
-                    chaos = false;
-                }
-            }
-            if (elem instanceof Finish) {
-                finish = elem;
+        if (finish && finish.getRecentlyMoved()) {
+            for (let loc of finish.occupiedBlocks()){
+                this.possibleUpdateNext.add(this.mines[loc.x][loc.y]);
             }
         }
-        
-        
+
+            
         //john conways logic on squares where game is moving
         for (let mine of this.possibleUpdateNext) {
             switch(mine.numActivatedNeighbors) {
@@ -674,10 +680,6 @@ class LandmineNetwork extends ArenaAbstraction {
             this.toUpdate.add(mine);
             this.possibleUpdateNext.add(mine);
         }
-
-
-
-
 
     }
 }
@@ -754,7 +756,7 @@ class ArenaSquare extends ArenaElem {
     isTouching(that) {
         if (that instanceof ArenaSquare) {
             //checks bounding boxes;
-            return Math.abs(this.location.x - that.location.x) < (this.size + that.size) && Math.abs(this.location.y - that.location.y) < (this.size + that.size) 
+            return Math.abs(this.location.x - that.location.x) <= (this.size + that.size) && Math.abs(this.location.y - that.location.y) <= (this.size + that.size)
         } else {
             return super.isTouching(that);
         }
@@ -880,12 +882,29 @@ class Finish extends ArenaSquare {
         
         //unfortunately, the finish needs a notion of the canvas to move itself
         this.canvas = canvas;
+        this.recentlyMoved = true;
+        this.waitTurn = false;
     }
     
     //moves the finish to a random spot on canvas;
     moveRandom() {
         let c = this.canvas;
         this.location = new Point(Math.round(Math.random()*c.w*.8 + c.w*.10), Math.round(Math.random()*c.h*.8 + c.h*.10));
+        this.recentlyMoved = true;
+    }
+    
+    getRecentlyMoved() {
+        return this.recentlyMoved;
+    }
+    
+    update() {
+        if (this.waitTurn) {
+            this.recentlyMoved = false;
+            this.waitTurn = false;
+        }
+        else if (this.recentlyMoved) {
+            this.waitTurn = true;
+        }
     }
     
     
