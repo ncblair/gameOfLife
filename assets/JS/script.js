@@ -742,6 +742,7 @@ class Wall extends ArenaElem {
 
 class ArenaSquare extends ArenaElem {
     constructor(size, colr, location) {
+        //For squares, size represents radius size
         function makeSquare(size, startLoc) {
             var occupied = new Set();
             for (let i = -size; i <= size; i++) {
